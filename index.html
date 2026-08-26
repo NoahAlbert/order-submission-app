@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order Submission</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 560px;
+    margin: 3rem auto;
+    padding: 0 1.5rem;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+  label { display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem; }
+  .hint { font-weight: 400; color: #666; font-size: 0.8rem; margin: -0.2rem 0 0.4rem; }
+  input, textarea, select {
+    width: 100%;
+    padding: 0.6rem;
+    margin-bottom: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    font-family: inherit;
+    background: white;
+  }
+  textarea { min-height: 100px; resize: vertical; }
+  textarea#cardlist { min-height: 140px; }
+  button {
+    background: #1a1a1a;
+    color: white;
+    border: none;
+    padding: 0.7rem 1.4rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #status { margin-top: 1rem; font-size: 0.9rem; }
+  #status.success { color: #1a7f37; }
+  #status.error { color: #c0392b; }
+  fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+  legend { font-weight: 600; font-size: 0.85rem; padding: 0 0.3rem; }
+</style>
+</head>
+<body>
+  <h1>Order Submission</h1>
+  <form id="order-form">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" required>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required>
+
+    <label for="order_size">Order Size (number of cards)</label>
+    <input type="number" id="order_size" name="order_size" min="1" step="1" required>
+
+    <label for="img_source_flag">Image Source</label>
+    <select id="img_source_flag" name="img_source_flag" required>
+      <option value="" disabled selected>Select one</option>
+      <option value="scryfall">Scryfall</option>
+      <option value="custom-frames">Custom Frames</option>
+      <option value="custom-art">Custom Art</option>
+      <option value="client">I'm providing my own images</option>
+    </select>
+
+    <fieldset>
+      <legend>Image Files (only needed if you're providing your own)</legend>
+      <label for="img_source_file">Upload a zip/compressed folder (under ~25MB)</label>
+      <input type="file" id="img_source_file" name="img_source_file" accept=".zip,.rar,.7z">
+      <label for="img_source_link">Or paste a link (Drive/Dropbox/WeTransfer) for larger files</label>
+      <input type="url" id="img_source_link" name="img_source_link" placeholder="https://...">
+    </fieldset>
+
+    <label for="cardlist">Card List</label>
+    <div class="hint">One card per line.</div>
+    <textarea id="cardlist" name="cardlist" required></textarea>
+
+    <label for="custom_requests">Custom Requests / Notes</label>
+    <div class="hint">Optional. Anything else we should know about this order.</div>
+    <textarea id="custom_requests" name="custom_requests"></textarea>
+
+    <button type="submit">Submit Order</button>
+    <div id="status"></div>
+  </form>
+
+  <script>
+    // Paste your Google Apps Script Web App URL here after deploying it (see README.md).
+    const ENDPOINT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+    const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB safety limit for direct upload
+
+    const form = document.getElementById('order-form');
+    const status = document.getElementById('status');
+    const button = form.querySelector('button');
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const file = form.img_source_file.files[0];
+      const link = form.img_source_link.value.trim();
+
+      if (file && file.size > MAX_FILE_BYTES) {
+        status.textContent = 'That file is too large to upload directly. Please use the link field instead.';
+        status.className = 'error';
+        return;
+      }
+
+      button.disabled = true;
+      status.textContent = 'Submitting...';
+      status.className = '';
+
+      const data = {
+        name: form.name.value,
+        email: form.email.value,
+        orderSize: form.order_size.value,
+        imgSourceFlag: form.img_source_flag.value,
+        imgSourceLink: link || null,
+        cardlist: form.cardlist.value,
+        customRequests: form.custom_requests.value,
+        imgSourceFile: null,
+      };
+
+      try {
+        if (file) {
+          data.imgSourceFile = {
+            filename: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            data: await fileToBase64(file),
+          };
+        }
+
+        const res = await fetch(ENDPOINT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight to Apps Script
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error('Request failed');
+        status.textContent = 'Thanks! Your order was submitted.';
+        status.className = 'success';
+        form.reset();
+      } catch (err) {
+        status.textContent = 'Something went wrong. Please try again.';
+        status.className = 'error';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
