@@ -43,6 +43,7 @@
   #status.error { color: #c0392b; }
   fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
   legend { font-weight: 600; font-size: 0.85rem; padding: 0 0.3rem; }
+  fieldset[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -66,8 +67,8 @@
       <option value="client">I'm providing my own images</option>
     </select>
 
-    <fieldset>
-      <legend>Image Files (only needed if you're providing your own)</legend>
+    <fieldset id="img_source_fieldset" hidden>
+      <legend>Image Files</legend>
       <label for="img_source_file">Upload a zip/compressed folder (under ~25MB)</label>
       <input type="file" id="img_source_file" name="img_source_file" accept=".zip,.rar,.7z">
       <label for="img_source_link">Or paste a link (Drive/Dropbox/WeTransfer) for larger files</label>
@@ -87,13 +88,28 @@
   </form>
 
   <script>
-    // Paste your Google Apps Script Web App URL here after deploying it (see README.md).
-    const ENDPOINT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+    const ENDPOINT_URL = '/api/orders';
     const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB safety limit for direct upload
 
     const form = document.getElementById('order-form');
     const status = document.getElementById('status');
     const button = form.querySelector('button');
+    const imgSourceFlagSelect = document.getElementById('img_source_flag');
+    const imgSourceFieldset = document.getElementById('img_source_fieldset');
+
+    // Dynamic form: the image-upload/link fieldset only matters when the
+    // client is providing their own images. Hide it otherwise, and clear
+    // any values left in it so they don't get submitted by mistake.
+    function updateImgSourceVisibility() {
+      const isClientProvided = imgSourceFlagSelect.value === 'client';
+      imgSourceFieldset.hidden = !isClientProvided;
+      if (!isClientProvided) {
+        form.img_source_file.value = '';
+        form.img_source_link.value = '';
+      }
+    }
+    imgSourceFlagSelect.addEventListener('change', updateImgSourceVisibility);
+    updateImgSourceVisibility();
 
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
@@ -142,13 +158,14 @@
 
         const res = await fetch(ENDPOINT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight to Apps Script
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error('Request failed');
         status.textContent = 'Thanks! Your order was submitted.';
         status.className = 'success';
         form.reset();
+        updateImgSourceVisibility();
       } catch (err) {
         status.textContent = 'Something went wrong. Please try again.';
         status.className = 'error';

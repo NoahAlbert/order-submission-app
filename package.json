@@ -1,0 +1,15 @@
+{
+  "name": "order-submission-app",
+  "version": "1.0.0",
+  "description": "Order submission form and admin dashboard, backed by Supabase and deployed on Cloudflare Pages.",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev . --compatibility-date=2024-01-01"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.109.0"
+  }
+}

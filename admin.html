@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orders Admin</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    margin: 2rem;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+  #login-panel { max-width: 320px; margin: 4rem auto; }
+  #login-panel input {
+    width: 100%; padding: 0.6rem; margin-bottom: 0.75rem;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; box-sizing: border-box;
+  }
+  #login-panel button, .save-hint { font-size: 0.9rem; }
+  button {
+    background: #1a1a1a; color: white; border: none;
+    padding: 0.55rem 1.1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #error { color: #c0392b; font-size: 0.9rem; margin-top: 0.5rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+  th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; position: sticky; top: 0; }
+  td.wrap { max-width: 220px; white-space: pre-wrap; word-break: break-word; }
+  select, input[type="number"] {
+    padding: 0.3rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; width: 100%; box-sizing: border-box;
+  }
+  .row-saving { opacity: 0.5; }
+  #toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  #toolbar button { background: #666; }
+  a.file-link { font-size: 0.85rem; }
+</style>
+</head>
+<body>
+  <div id="login-panel">
+    <h1>Orders Admin</h1>
+    <input type="password" id="password" placeholder="Admin password" autofocus>
+    <button id="login-btn">Log in</button>
+    <div id="error"></div>
+  </div>
+
+  <div id="dashboard" hidden>
+    <div id="toolbar">
+      <h1 style="margin:0">Orders</h1>
+      <button id="logout-btn">Log out</button>
+    </div>
+    <table id="orders-table">
+      <thead>
+        <tr>
+          <th>Created</th>
+          <th>Name / Email</th>
+          <th>Status</th>
+          <th>Size</th>
+          <th>Image Source</th>
+          <th>Cardlist</th>
+          <th>Custom Requests</th>
+          <th>Price Quote</th>
+          <th>Paid</th>
+        </tr>
+      </thead>
+      <tbody id="orders-body"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const loginPanel = document.getElementById('login-panel');
+    const dashboard = document.getElementById('dashboard');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const errorDiv = document.getElementById('error');
+    const ordersBody = document.getElementById('orders-body');
+
+    const STATUSES = ['new', 'wip', 'complete', 'delivered'];
+
+    function getToken() {
+      return sessionStorage.getItem('admin_password') || '';
+    }
+
+    function setToken(token) {
+      sessionStorage.setItem('admin_password', token);
+    }
+
+    function clearToken() {
+      sessionStorage.removeItem('admin_password');
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+      if (res.status === 401) {
+        clearToken();
+        showLogin('Wrong password, or your session expired.');
+        throw new Error('Unauthorized');
+      }
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      return res.json();
+    }
+
+    function showLogin(message) {
+      dashboard.hidden = true;
+      loginPanel.hidden = false;
+      errorDiv.textContent = message || '';
+      passwordInput.value = '';
+      passwordInput.focus();
+    }
+
+    function showDashboard() {
+      loginPanel.hidden = true;
+      dashboard.hidden = false;
+    }
+
+    function fmtDate(iso) {
+      return new Date(iso).toLocaleString();
+    }
+
+    function renderOrders(orders) {
+      ordersBody.innerHTML = '';
+      for (const order of orders) {
+        const tr = document.createElement('tr');
+        tr.dataset.id = order.id;
+
+        const statusSelect = document.createElement('select');
+        for (const s of STATUSES) {
+          const opt = document.createElement('option');
+          opt.value = s;
+          opt.textContent = s;
+          if (s === order.status) opt.selected = true;
+          statusSelect.appendChild(opt);
+        }
+        statusSelect.addEventListener('change', () => saveField(tr, order.id, { status: statusSelect.value }));
+
+        const priceInput = document.createElement('input');
+        priceInput.type = 'number';
+        priceInput.step = '0.01';
+        priceInput.value = order.price_quote ?? '';
+        priceInput.placeholder = '—';
+        priceInput.addEventListener('change', () => saveField(tr, order.id, {
+          price_quote: priceInput.value === '' ? null : Number(priceInput.value),
+        }));
+
+        const paidCheckbox = document.createElement('input');
+        paidCheckbox.type = 'checkbox';
+        paidCheckbox.checked = !!order.paid;
+        paidCheckbox.addEventListener('change', () => saveField(tr, order.id, { paid: paidCheckbox.checked }));
+
+        tr.innerHTML = `
+          <td>${fmtDate(order.created_at)}</td>
+          <td>${escapeHtml(order.name)}<br><span style="color:#666">${escapeHtml(order.email)}</span></td>
+          <td class="status-cell"></td>
+          <td>${order.order_size}</td>
+          <td class="img-cell">${escapeHtml(order.img_source_flag)}</td>
+          <td class="wrap">${escapeHtml(order.cardlist)}</td>
+          <td class="wrap">${escapeHtml(order.custom_requests || '')}</td>
+          <td class="price-cell"></td>
+          <td class="paid-cell"></td>
+        `;
+        tr.querySelector('.status-cell').appendChild(statusSelect);
+        tr.querySelector('.price-cell').appendChild(priceInput);
+        tr.querySelector('.paid-cell').appendChild(paidCheckbox);
+
+        if (order.img_source) {
+          const imgCell = tr.querySelector('.img-cell');
+          imgCell.appendChild(document.createElement('br'));
+          const link = document.createElement('a');
+          link.href = order.img_source;
+          link.textContent = 'View file/link';
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.className = 'file-link';
+          imgCell.appendChild(link);
+        }
+
+        ordersBody.appendChild(tr);
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    async function saveField(row, id, patch) {
+      row.classList.add('row-saving');
+      try {
+        await api(`/api/orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+      } catch (err) {
+        alert('Failed to save change: ' + err.message);
+      } finally {
+        row.classList.remove('row-saving');
+      }
+    }
+
+    async function loadOrders() {
+      const orders = await api('/api/orders');
+      renderOrders(orders);
+      showDashboard();
+    }
+
+    loginBtn.addEventListener('click', async () => {
+      setToken(passwordInput.value);
+      try {
+        await loadOrders();
+      } catch (err) {
+        // showLogin already called by api() on 401; for other errors, surface them
+        if (err.message !== 'Unauthorized') {
+          errorDiv.textContent = 'Something went wrong loading orders.';
+        }
+      }
+    });
+    passwordInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loginBtn.click();
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      clearToken();
+      showLogin();
+    });
+
+    // If a password is already in this tab's session, try it immediately.
+    if (getToken()) {
+      loadOrders().catch(() => {});
+    }
+  </script>
+</body>
+</html>
