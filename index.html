@@ -138,15 +138,13 @@
 
   *, *::before, *::after { box-sizing: border-box; }
 
-  /* Capped and centred. The card grid still gets ~1200px (six columns), which is
-     what the full-width grid was after, but the form no longer hugs the left edge
-     of a wide monitor with several hundred pixels of dead space beside it. */
+  /* Full-bleed with a small side gutter. The page is meant to fit the window,
+     so nothing is centred into a fixed column with dead space either side. */
   body {
     font-family: system-ui, -apple-system, sans-serif;
-    max-width: 1240px;
-    margin: var(--space-6) auto;
-    padding: 0 var(--space-5);
-    line-height: 1.55;
+    margin: 0;
+    padding: var(--space-4) var(--space-4) var(--space-6);
+    line-height: 1.5;
     color: var(--fg);
     background: var(--bg);
     -webkit-font-smoothing: antialiased;
@@ -156,11 +154,11 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    margin-bottom: var(--space-5);
-    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--border);
   }
-  h1 { font-size: 1.75rem; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
 
   label { display: block; margin-bottom: var(--space-1); font-weight: 600; font-size: var(--text-md); }
   .hint { font-weight: 400; color: var(--fg-muted); font-size: var(--text-sm); margin: 0 0 var(--space-2); }
@@ -180,9 +178,8 @@
   input, textarea, select {
     display: block;
     width: 100%;
-    max-width: 560px;
-    padding: 0.6rem 0.7rem;
-    margin-bottom: var(--space-4);
+    padding: 0.45rem 0.6rem;
+    margin-bottom: var(--space-3);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     font-size: 1rem;
@@ -199,24 +196,30 @@
     box-shadow: 0 0 0 3px var(--accent-ring);
   }
   input[type="file"] { padding: 0.5rem; color: var(--fg-muted); font-size: var(--text-md); }
-  textarea { min-height: 100px; resize: vertical; line-height: 1.5; }
+  textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
   /* Monospace so set codes and collector numbers line up the way the hint shows them. */
   textarea#cardlist {
-    min-height: 150px;
+    min-height: 132px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.9rem;
   }
-  /* A sheet count is at most a couple of digits, so it doesn't need the full
-     560px the other controls get. */
-  #order_size { width: 7rem; margin-bottom: var(--space-2); }
-  #sheet-math { color: var(--fg-muted); font-size: var(--text-md); margin-bottom: var(--space-4); }
+  /* The short fields sit on one row so they use the window width, rather than
+     stacking down a narrow column with the rest of the page empty beside them.
+     auto-fit collapses the row to fewer columns as the window narrows. */
+  .field-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0 var(--space-4);
+    align-items: start;
+  }
+  #order_size { margin-bottom: var(--space-1); }
+  #sheet-math { color: var(--fg-muted); font-size: var(--text-md); margin-bottom: var(--space-3); }
 
   fieldset {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: var(--space-4);
-    margin: 0 0 var(--space-4);
-    max-width: 560px;
+    padding: var(--space-3);
+    margin: 0 0 var(--space-3);
     background: var(--surface);
   }
   legend { font-weight: 600; font-size: var(--text-sm); padding: 0 var(--space-1); }
@@ -298,7 +301,7 @@
   /* ---- Submit status ---------------------------------------------------
      Padded only once it carries a result class, so the transient "Submitting..."
      (which JS sets with an empty className) stays plain text. */
-  #status { margin-top: var(--space-4); font-size: var(--text-md); max-width: 560px; }
+  #status { margin-top: var(--space-3); font-size: var(--text-md); }
   #status.success, #status.error {
     padding: 0.6rem 0.8rem;
     border-radius: var(--radius);
@@ -312,17 +315,16 @@
      (0.735), not a bare card's 63/88 (0.716). Using the card ratio would crop them. */
   #frame-style-picker {
     display: grid;
-    grid-template-columns: 1fr 260px;
-    gap: var(--space-5);
+    grid-template-columns: 1fr 240px;
+    gap: var(--space-4);
     align-items: start;
-    max-width: 940px;
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-3);
   }
   #frame-style-thumbs {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
     gap: var(--space-2);
-    max-height: 380px;
+    max-height: 300px;
     overflow-y: auto;
     padding: 2px var(--space-1) 2px 2px;
     scrollbar-width: thin;
@@ -393,7 +395,6 @@
     border-radius: var(--radius);
     padding: var(--space-3);
     margin-bottom: var(--space-3);
-    max-width: 560px;
   }
   #filename-note code { background: var(--info-code-bg); color: inherit; }
 
@@ -402,7 +403,7 @@
   #lookup-status { font-size: var(--text-md); color: var(--fg-muted); margin: var(--space-2) 0; }
   #lookup-status.error { color: var(--danger); }
 
-  #lookup-results { margin-bottom: var(--space-5); }
+  #lookup-results { margin-bottom: var(--space-4); }
   #lookup-results.stale { opacity: 0.45; }
   #lookup-summary { font-size: var(--text-md); color: var(--fg-muted); margin-bottom: var(--space-3); }
 
@@ -419,8 +420,8 @@
 
   #card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-3);
   }
 
   .card-cell {
@@ -428,8 +429,8 @@
     flex-direction: column;
     border: 1px solid var(--border);
     border-top: 3px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-3);
+    border-radius: var(--radius);
+    padding: var(--space-2);
     background: var(--surface);
     box-shadow: var(--shadow-1);
     transition: border-color var(--transition), box-shadow var(--transition);
@@ -518,8 +519,8 @@
   .printing-panel { grid-column: 1 / -1; }
   .printing-panel-inner {
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: var(--space-4);
+    border-radius: var(--radius);
+    padding: var(--space-3);
     background: var(--surface-2);
     box-shadow: var(--shadow-1);
   }
@@ -596,8 +597,8 @@
   /* ---- Responsive ------------------------------------------------------- */
 
   @media (max-width: 900px) {
-    body { margin: var(--space-5) auto; padding: 0 var(--space-4); }
-    h1 { font-size: 1.5rem; }
+    body { padding: var(--space-3) var(--space-3) var(--space-5); }
+    h1 { font-size: 1.2rem; }
   }
   @media (max-width: 700px) {
     #frame-style-picker { grid-template-columns: 1fr; }
@@ -607,7 +608,6 @@
     #card-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
     .printing-strip { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
     #frame-style-thumbs { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
-    input, textarea, select, fieldset, #filename-note, #status { max-width: none; }
     button[type="submit"] { width: 100%; }
   }
 </style>
@@ -618,30 +618,38 @@
     <button type="button" id="theme-toggle">☀ Light</button>
   </div>
   <form id="order-form">
-    <label for="name">Name</label>
-    <input type="text" id="name" name="name" required>
+    <div class="field-row">
+      <div class="field">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required>
+      </div>
 
-    <label for="order_size_mode">Order Size</label>
-    <select id="order_size_mode" name="order_size_mode" required>
-      <option value="" disabled selected>Select one</option>
-      <option value="commander">Full Commander Deck</option>
-      <option value="sheets">Order by sheet</option>
-    </select>
+      <div class="field">
+        <label for="order_size_mode">Order Size</label>
+        <select id="order_size_mode" name="order_size_mode" required>
+          <option value="" disabled selected>Select one</option>
+          <option value="commander">Full Commander Deck</option>
+          <option value="sheets">Order by sheet</option>
+        </select>
+      </div>
 
-    <div id="sheet-count-section" hidden>
-      <label for="order_size">Number of sheets</label>
-      <input type="number" id="order_size" name="order_size" min="1" step="1">
-      <div id="sheet-math" hidden></div>
+      <div id="sheet-count-section" class="field" hidden>
+        <label for="order_size">Number of sheets</label>
+        <input type="number" id="order_size" name="order_size" min="1" step="1">
+        <div id="sheet-math" hidden></div>
+      </div>
+
+      <div class="field">
+        <label for="img_source_flag">Image Source</label>
+        <select id="img_source_flag" name="img_source_flag" required>
+          <option value="" disabled selected>Select one</option>
+          <option value="scryfall">Scryfall</option>
+          <option value="custom-frames">Custom Frames</option>
+          <option value="custom-art">Full Custom</option>
+          <option value="client">I'm providing my own images</option>
+        </select>
+      </div>
     </div>
-
-    <label for="img_source_flag">Image Source</label>
-    <select id="img_source_flag" name="img_source_flag" required>
-      <option value="" disabled selected>Select one</option>
-      <option value="scryfall">Scryfall</option>
-      <option value="custom-frames">Custom Frames</option>
-      <option value="custom-art">Full Custom</option>
-      <option value="client">I'm providing my own images</option>
-    </select>
 
     <div id="frame-style-section" hidden>
       <label>Frame Style</label>
