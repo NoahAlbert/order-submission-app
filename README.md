@@ -96,21 +96,31 @@ order. `price_quote` stays yours to fill in from the admin table.
 
 ## Deploying
 
-Deploys are manual via the Cloudflare CLI (no GitHub auto-deploy is wired
-up — see note below):
+Deploys are manual, from a checkout of `main`:
 
 ```
-npx wrangler pages deploy . --project-name order-submission-app
+npm ci
+npx wrangler pages deploy . --project-name order-submission-app --branch main
 ```
 
-This uploads the current working directory (frontend + Functions) as a new
-production deployment.
+`npm ci` is not optional even though nothing here is bundled by hand: wrangler
+compiles `functions/` against `node_modules` at deploy time.
 
-**Note on auto-deploy**: Cloudflare Pages *can* auto-deploy on every
-`git push` if you connect this GitHub repo in the Cloudflare dashboard
-(Pages project > Settings > Builds > connect to Git — requires installing
-the Cloudflare Pages GitHub App, a one-time browser step). Without that,
-use the `wrangler pages deploy` command above after pushing.
+`.assetsignore` keeps `node_modules/`, `.claude/`, and the source files out of
+the upload. The site root is also the repo root, so without it the entire
+repository would be publicly served. A clean deploy uploads 36 files.
+
+**Auto-deploy on push is not available to this project.** It was created as a
+Direct Upload project, and per Cloudflare's docs those cannot be converted:
+"If you choose Direct Upload, you cannot switch to Git integration later. You
+will have to create a new project with Git integration to use automatic
+deployments."
+
+Wiring up push-to-deploy therefore means creating a *second* Pages project
+connected to this repo (which installs the Cloudflare Pages GitHub App -- a
+browser step), copying the three secrets onto it, and deleting this project to
+free the `order-submission-app` subdomain. Until then, run the command above
+after pushing.
 
 ## Supabase setup
 
