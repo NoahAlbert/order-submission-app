@@ -1,5 +1,5 @@
--- Run once in the Supabase SQL Editor against an existing project.
--- schema.sql already reflects these changes for a fresh one.
+-- Applied on top of 0000 by the GitHub integration. Idempotent, so it is a
+-- no-op against the live project, where this ran by hand in the SQL Editor.
 
 -- The order form no longer collects an email address.
 alter table public.orders alter column email drop not null;

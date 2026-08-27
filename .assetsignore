@@ -1,0 +1,14 @@
+# Everything here still needs to exist on disk at deploy time -- wrangler
+# bundles functions/ against node_modules -- but none of it should be served
+# as a public asset. The site root is also the repo root, so without this the
+# whole repository gets uploaded.
+node_modules/
+.claude/
+.git/
+.wrangler/
+.dev.vars
+supabase/
+README.md
+package.json
+package-lock.json
+.gitignore

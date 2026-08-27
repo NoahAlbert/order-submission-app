@@ -18,8 +18,11 @@ Supabase (free Postgres + file storage).
 - `functions/api/pricing/index.js` — `GET` (public, feeds the quote) / `PUT`
   (admin-only) for `/api/pricing`.
 - `functions/_lib.js` — shared Supabase client + admin-password check.
-- `supabase/schema.sql` — the `orders` and `pricing` tables + `order-uploads`
-  storage bucket definition (already applied to the live project).
+- `supabase/migrations/` — the `orders` and `pricing` tables + `order-uploads`
+  storage bucket, as an ordered chain. This is the schema's single source of
+  truth; the Supabase GitHub integration applies anything new here on each
+  push to `main`.
+- `supabase/config.toml` — points that integration at the right project.
 
 ## Fields
 
@@ -93,38 +96,70 @@ order. `price_quote` stays yours to fill in from the admin table.
 
 ## Deploying
 
-Deploys are manual via the Cloudflare CLI (no GitHub auto-deploy is wired
-up — see note below):
+Deploys are manual, from a checkout of `main`:
 
 ```
-npx wrangler pages deploy . --project-name order-submission-app
+npm ci
+npx wrangler pages deploy . --project-name order-submission-app --branch main
 ```
 
-This uploads the current working directory (frontend + Functions) as a new
-production deployment.
+`npm ci` is not optional even though nothing here is bundled by hand: wrangler
+compiles `functions/` against `node_modules` at deploy time.
 
-**Note on auto-deploy**: Cloudflare Pages *can* auto-deploy on every
-`git push` if you connect this GitHub repo in the Cloudflare dashboard
-(Pages project > Settings > Builds > connect to Git — requires installing
-the Cloudflare Pages GitHub App, a one-time browser step). Without that,
-use the `wrangler pages deploy` command above after pushing.
+`.assetsignore` keeps `node_modules/`, `.claude/`, and the source files out of
+the upload. The site root is also the repo root, so without it the entire
+repository would be publicly served. A clean deploy uploads 36 files.
+
+**Auto-deploy on push is not available to this project.** It was created as a
+Direct Upload project, and per Cloudflare's docs those cannot be converted:
+"If you choose Direct Upload, you cannot switch to Git integration later. You
+will have to create a new project with Git integration to use automatic
+deployments."
+
+Wiring up push-to-deploy therefore means creating a *second* Pages project
+connected to this repo (which installs the Cloudflare Pages GitHub App -- a
+browser step), copying the three secrets onto it, and deleting this project to
+free the `order-submission-app` subdomain. Until then, run the command above
+after pushing.
 
 ## Supabase setup
 
-**The `pricing` table is new — run `supabase/migrations/0002_pricing.sql` in
-the live project's SQL Editor once.** Until you do, `GET /api/pricing` returns
-an error and the form falls back to the hardcoded defaults (the same numbers),
-so the quote still shows — but the admin page's Pricing panel won't load and
-saving from it won't work.
+Schema changes deploy themselves: the GitHub integration watches `main` and
+applies anything new in `supabase/migrations/` to the production database. Add
+a change as the next numbered file there rather than running SQL by hand in the
+dashboard — hand-run SQL and the migration history drift apart, and the
+integration has no way to tell.
 
-### Recreating from scratch (already done for the live project)
+Every migration is written idempotently (`if not exists`, `on conflict do
+nothing`), because the live project was built by hand before these files were
+migrations. Replaying the whole chain against production is a no-op.
 
-If you ever need to recreate this from scratch (e.g. a new Supabase
-project): create the project, open SQL Editor, paste in and run
-`supabase/schema.sql`, then grab the Project URL and `service_role` key from
-Project Settings > API and set them as Cloudflare Pages secrets:
+### Connecting the integration (one-time)
+
+Project Settings > Integrations > GitHub: pick this repo, set the working
+directory to `.` and the production branch to `main`.
+
+Supabase has no record of `0000` and `0001` ever running, since they were
+applied by hand in the SQL Editor. Tell it they already ran, or it will treat
+production as an empty database:
 
 ```
+npx supabase link --project-ref xodrsdykcsloprdwyooh
+npx supabase migration repair --status applied 0000 0001
+```
+
+Leave `0002` alone — it creates the `pricing` table, which the live project
+may not have yet. Letting the integration apply it is correct either way: if
+it was already run by hand, the migration is a no-op.
+
+### Recreating from scratch (e.g. a brand-new Supabase project)
+
+Create the project, apply the chain, then set the Cloudflare Pages secrets:
+
+```
+npx supabase link --project-ref <new-ref>
+npx supabase db push
+
 npx wrangler pages secret put SUPABASE_URL --project-name order-submission-app
 npx wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY --project-name order-submission-app
 npx wrangler pages secret put ADMIN_PASSWORD --project-name order-submission-app
