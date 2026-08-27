@@ -301,6 +301,52 @@
   /* ---- Submit status ---------------------------------------------------
      Padded only once it carries a result class, so the transient "Submitting..."
      (which JS sets with an empty className) stays plain text. */
+  /* ---- Quote -----------------------------------------------------------
+     Derived entirely from Order Size and Image Source above — it has no inputs
+     of its own, so it can never quote something different from what gets
+     submitted. Sits directly above Submit so the price is the last thing read
+     before the order goes. */
+  #quote-section { margin-bottom: var(--space-4); }
+  #quote-box {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: var(--space-3) var(--space-4);
+  }
+  .quote-empty { color: var(--fg-muted); font-size: var(--text-md); }
+  .quote-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-4);
+    font-size: var(--text-md);
+    padding: var(--space-1) 0;
+  }
+  .quote-detail { color: var(--fg-muted); font-size: var(--text-sm); }
+  .quote-amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .quote-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-4);
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 1.05rem;
+  }
+  .quote-total .quote-amount { color: var(--accent); }
+  .quote-note {
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--warn);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2);
+  }
+  .quote-fineprint { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--fg-faint); }
+
   #status { margin-top: var(--space-3); font-size: var(--text-md); }
   #status.success, #status.error {
     padding: 0.6rem 0.8rem;
@@ -722,6 +768,12 @@
     <div class="hint">Optional. Anything else we should know about this order.</div>
     <textarea id="custom_requests" name="custom_requests"></textarea>
 
+    <div id="quote-section">
+      <label>Estimated Quote</label>
+      <div class="hint">Updates as you choose an order size and image source above.</div>
+      <div id="quote-box"></div>
+    </div>
+
     <button type="submit">Submit Order</button>
     <div id="status"></div>
   </form>
@@ -940,6 +992,104 @@
     orderSizeModeEl.addEventListener('change', updateOrderSizeVisibility);
     orderSizeEl.addEventListener('input', updateSheetMath);
     updateOrderSizeVisibility();
+
+    // ---- Quote ------------------------------------------------------------
+    // A quote is always the `base` row plus the one row matching the chosen
+    // image source, priced per sheet or as a flat full-deck rate. The admin page
+    // edits those rows; this only reads them.
+
+    const quoteBox = document.getElementById('quote-box');
+
+    // Fallback for when /api/pricing can't be reached (page opened over file://,
+    // API down, migration not yet run). These mirror the seeded rows, so the
+    // quote degrades to the right number rather than to an empty box.
+    const DEFAULT_PRICING = [
+      { id: 'base', label: 'Base printing', per_sheet: 1.25, per_deck: 15, is_minimum: false },
+      { id: 'scryfall', label: 'Scryfall images', per_sheet: 0, per_deck: 0, is_minimum: false },
+      { id: 'custom-frames', label: 'Custom Frames', per_sheet: 0.75, per_deck: 10, is_minimum: false },
+      { id: 'custom-art', label: 'Full Custom', per_sheet: 6.75, per_deck: 20, is_minimum: true },
+      { id: 'client', label: 'Client-provided images', per_sheet: 0, per_deck: 0, is_minimum: false },
+    ];
+    let pricing = DEFAULT_PRICING;
+
+    function pricingFor(id) {
+      return pricing.find((row) => row.id === id) || null;
+    }
+
+    function fmtMoney(value) {
+      return '$' + (Number(value) || 0).toFixed(2);
+    }
+
+    function quoteLineHtml(label, detail, amount) {
+      return '<div class="quote-line"><span>' + escapeHtml(label)
+        + (detail ? ' <span class="quote-detail">' + escapeHtml(detail) + '</span>' : '')
+        + '</span><span class="quote-amount">' + escapeHtml(amount) + '</span></div>';
+    }
+
+    function renderQuote() {
+      const base = pricingFor('base');
+      const extra = pricingFor(imgSourceFlagEl.value);
+      const mode = orderSizeModeEl.value;
+
+      if (!base || !extra || !mode) {
+        quoteBox.innerHTML = '<div class="quote-empty">'
+          + 'Choose an order size and an image source above and your estimate appears here.</div>';
+        return;
+      }
+
+      const byDeck = mode === 'commander';
+      const sheets = byDeck ? null : sheetCount();
+      if (!byDeck && sheets === null) {
+        quoteBox.innerHTML = '<div class="quote-empty">'
+          + 'Enter how many sheets you need to see your estimate.</div>';
+        return;
+      }
+
+      const rate = (row) => Number(byDeck ? row.per_deck : row.per_sheet) || 0;
+      const amount = (row) => (byDeck ? rate(row) : rate(row) * sheets);
+      const detail = (row) => (byDeck
+        ? 'Full Commander Deck'
+        : sheets + (sheets === 1 ? ' sheet × ' : ' sheets × ') + fmtMoney(rate(row)));
+
+      // A zero-rate source is priced, just at nothing extra — saying so beats
+      // a "$0.00" line that reads like a bug, and beats hiding it entirely.
+      const charged = rate(extra) > 0;
+      const total = amount(base) + amount(extra);
+
+      quoteBox.innerHTML =
+        quoteLineHtml(base.label, detail(base), fmtMoney(amount(base)))
+        + quoteLineHtml(extra.label, charged ? detail(extra) : 'no surcharge',
+          charged ? fmtMoney(amount(extra)) : 'Included')
+        + '<div class="quote-total"><span>Estimated total</span>'
+        + '<span class="quote-amount">' + (extra.is_minimum ? 'from ' : '') + fmtMoney(total)
+        + '</span></div>'
+        + (extra.is_minimum
+          ? '<div class="quote-note">' + escapeHtml(extra.label)
+            + ' is quoted from this minimum — the final price depends on the artwork and how'
+            + ' much work each card takes. We confirm your exact quote before anything is printed.</div>'
+          : '<div class="quote-fineprint">An estimate, not an invoice —'
+            + ' we confirm the final quote before printing.</div>');
+    }
+
+    // Own listeners rather than hooking the visibility handlers above: those run
+    // during setup, before this block's constants are initialised.
+    orderSizeModeEl.addEventListener('change', renderQuote);
+    orderSizeEl.addEventListener('input', renderQuote);
+    imgSourceFlagEl.addEventListener('change', renderQuote);
+    renderQuote();
+
+    (async function loadPricing() {
+      try {
+        const res = await fetch('/api/pricing');
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (Array.isArray(rows) && rows.length) pricing = rows;
+      } catch (err) {
+        // Keep DEFAULT_PRICING — a stale estimate beats no estimate.
+      } finally {
+        renderQuote();
+      }
+    })();
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (c) => (
@@ -1647,6 +1797,11 @@
           .forEach((el) => el.classList.remove('selected'));
         restoreFramePreview();
         updateSourceVisibility();
+        // reset() clears the values but leaves everything derived from them
+        // showing the old order — the sheet-count field included.
+        updateOrderSizeVisibility();
+        updateSheetMath();
+        renderQuote();
         lookupRows = null;
         lookupStale = false;
         renderResults();

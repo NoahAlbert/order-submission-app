@@ -9,14 +9,17 @@ Supabase (free Postgres + file storage).
 - `index.html` — the public order form. The image-upload section only
   appears when the client selects "I'm providing my own images."
 - `admin.html` — password-gated table of all orders. Lets you edit `status`,
-  `paid`, and `price_quote` inline; changes save immediately.
+  `paid`, and `price_quote` inline; changes save immediately. Above the table,
+  a **Pricing** editor sets the numbers the form quotes from.
 - `functions/api/orders/index.js` — `GET` (list, admin-only) / `POST`
   (create, public) for `/api/orders`.
 - `functions/api/orders/[id].js` — `PATCH` (admin-only) for
   `/api/orders/:id`.
+- `functions/api/pricing/index.js` — `GET` (public, feeds the quote) / `PUT`
+  (admin-only) for `/api/pricing`.
 - `functions/_lib.js` — shared Supabase client + admin-password check.
-- `supabase/schema.sql` — the `orders` table + `order-uploads` storage
-  bucket definition (already applied to the live project).
+- `supabase/schema.sql` — the `orders` and `pricing` tables + `order-uploads`
+  storage bucket definition (already applied to the live project).
 
 ## Fields
 
@@ -37,6 +40,40 @@ Supabase (free Postgres + file storage).
 
 `status`, `price_quote`, and `paid` are intentionally not on the public form
 — a client shouldn't be able to set their own price or mark an order paid.
+
+## Quoting
+
+The bottom of the order form, just above **Submit Order**, shows a running
+estimate. It has no inputs of its own — it reads Order Size and Image Source
+from the form above it, so it can never quote something different from what
+gets submitted.
+
+A quote is always two lines: the **base** rate, plus the one row matching the
+chosen image source. Each row carries a per-sheet rate and a flat full-deck
+rate, and the order-size mode picks which one applies (`N sheets × per_sheet`,
+or `per_deck` once for a Commander deck).
+
+| Aspect | Per sheet | Full deck | Quoted total |
+|---|---|---|---|
+| Base printing | $1.25 | $15.00 | applies to every order |
+| Scryfall images | $0.00 | $0.00 | base alone — $1.25/sheet, $15.00/deck |
+| Custom Frames | $0.75 | $10.00 | $2.00/sheet, $25.00/deck |
+| Full Custom | $6.75 | $20.00 | from $8.00/sheet, from $35.00/deck |
+| Client-provided images | $0.00 | $0.00 | base alone — $1.25/sheet, $15.00/deck |
+
+A row flagged **minimum** makes its quote a floor: the form shows "from $X"
+and explains that the final price depends on the work involved. Full Custom is
+the only one seeded that way.
+
+Every one of those numbers — including the minimum flag — is edited in the
+admin page's Pricing panel and stored in the `pricing` table; nothing is
+hardcoded server-side. `index.html` does carry a `DEFAULT_PRICING` copy of the
+seeded values, used only as a fallback when `/api/pricing` can't be reached, so
+the quote degrades to a sensible number instead of an empty box. Update it if
+you change the seeds and want the offline fallback to stay honest.
+
+The quote is an estimate shown to the client; it is **not** written to the
+order. `price_quote` stays yours to fill in from the admin table.
 
 ## Local development
 
@@ -72,7 +109,15 @@ production deployment.
 the Cloudflare Pages GitHub App, a one-time browser step). Without that,
 use the `wrangler pages deploy` command above after pushing.
 
-## Supabase setup (already done for the live project)
+## Supabase setup
+
+**The `pricing` table is new — run `supabase/migrations/0002_pricing.sql` in
+the live project's SQL Editor once.** Until you do, `GET /api/pricing` returns
+an error and the form falls back to the hardcoded defaults (the same numbers),
+so the quote still shows — but the admin page's Pricing panel won't load and
+saving from it won't work.
+
+### Recreating from scratch (already done for the live project)
 
 If you ever need to recreate this from scratch (e.g. a new Supabase
 project): create the project, open SQL Editor, paste in and run
