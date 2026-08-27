@@ -728,7 +728,7 @@
 
   <script>
     // Paste your Google Apps Script Web App URL here after deploying it (see README.md).
-    const ENDPOINT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+    const ENDPOINT_URL = '/api/orders';
     const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB safety limit for direct upload
     const SCRYFALL = 'https://api.scryfall.com';
     const COLLECTION_BATCH = 75; // Scryfall's hard cap per /cards/collection request
@@ -1635,7 +1635,7 @@
 
         const res = await fetch(ENDPOINT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight to Apps Script
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error('Request failed');

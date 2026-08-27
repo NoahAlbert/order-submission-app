@@ -4,7 +4,7 @@ create table public.orders (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
   name text not null,
-  email text not null,
+  email text,
   status text not null default 'new' check (status in ('new', 'wip', 'complete', 'delivered')),
   order_size integer not null,
   img_source_flag text not null check (img_source_flag in ('scryfall', 'custom-frames', 'custom-art', 'client')),
@@ -12,7 +12,10 @@ create table public.orders (
   cardlist text not null,
   price_quote numeric,
   paid boolean not null default false,
-  custom_requests text
+  custom_requests text,
+  frame_style text,
+  card_images text,
+  card_frame_styles text
 );
 
 -- RLS is enabled with no policies: only requests using the service_role key

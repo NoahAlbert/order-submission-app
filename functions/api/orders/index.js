@@ -23,9 +23,14 @@ export async function onRequestPost(context) {
   const {
     name, email, orderSize, imgSourceFlag, imgSourceLink,
     cardlist, customRequests, imgSourceFile,
+    frameStyle, cardImages, cardFrameStyles,
   } = body;
 
-  if (!name || !email || !orderSize || !imgSourceFlag || !cardlist) {
+  // Email is optional: the form stopped collecting it. "I'm providing my own
+  // images" hides the card list too, so that is only required for the sources
+  // that actually print from one.
+  const needsCardlist = imgSourceFlag !== 'client';
+  if (!name || !orderSize || !imgSourceFlag || (needsCardlist && !cardlist)) {
     return json({ error: 'Missing required fields' }, 400);
   }
   if (!VALID_IMG_SOURCE_FLAGS.includes(imgSourceFlag)) {
@@ -52,12 +57,17 @@ export async function onRequestPost(context) {
     .from('orders')
     .insert({
       name,
-      email,
+      email: email || null,
       order_size: Number(orderSize),
       img_source_flag: imgSourceFlag,
       img_source: imgSource,
-      cardlist,
+      cardlist: cardlist || '',
       custom_requests: customRequests || null,
+      // Order-level style, plus the per-line resolutions so each column stands
+      // alone. Blank whenever the chosen source does not use our frames.
+      frame_style: frameStyle || null,
+      card_images: cardImages || null,
+      card_frame_styles: cardFrameStyles || null,
     })
     .select()
     .single();

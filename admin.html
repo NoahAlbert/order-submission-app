@@ -156,7 +156,7 @@
 
         tr.innerHTML = `
           <td>${fmtDate(order.created_at)}</td>
-          <td>${escapeHtml(order.name)}<br><span style="color:#666">${escapeHtml(order.email)}</span></td>
+          <td>${escapeHtml(order.name)}<br><span style="color:#666">${escapeHtml(order.email || '')}</span></td>
           <td class="status-cell"></td>
           <td>${order.order_size}</td>
           <td class="img-cell">${escapeHtml(order.img_source_flag)}</td>
