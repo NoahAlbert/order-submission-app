@@ -34,6 +34,24 @@
   #toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
   #toolbar button { background: #666; }
   a.file-link { font-size: 0.85rem; }
+
+  /* ---- Pricing editor ---------------------------------------------------
+     Sits above the orders table because it is settings, not data: read it
+     once, then scroll past it to the orders you actually came for. */
+  #pricing-panel { margin-bottom: 2.5rem; }
+  #pricing-panel h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+  .hint { color: #666; font-size: 0.85rem; margin: 0 0 0.75rem; max-width: 62ch; }
+  #pricing-table { max-width: 720px; }
+  #pricing-table td.money { width: 7.5rem; }
+  #pricing-table td.flag { width: 5rem; text-align: center; }
+  #pricing-table input[type="checkbox"] { margin: 0; }
+  td.total { color: #666; font-size: 0.85rem; white-space: nowrap; }
+  .money-cell { display: flex; align-items: center; gap: 0.25rem; }
+  .money-cell span { color: #666; }
+  #pricing-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+  #pricing-status { font-size: 0.85rem; }
+  #pricing-status.ok { color: #1a7f37; }
+  #pricing-status.err { color: #c0392b; }
 </style>
 </head>
 <body>
@@ -49,6 +67,33 @@
       <h1 style="margin:0">Orders</h1>
       <button id="logout-btn">Log out</button>
     </div>
+    <section id="pricing-panel">
+      <h2>Pricing</h2>
+      <p class="hint">
+        What the order form quotes before someone submits. <strong>Base printing</strong>
+        applies to every order; the image-source row matching their choice is added
+        on top of it. <strong>Minimum</strong> marks that combination as a starting
+        price ("from $X") rather than a fixed one.
+      </p>
+      <table id="pricing-table">
+        <thead>
+          <tr>
+            <th>Aspect</th>
+            <th>Per sheet</th>
+            <th>Full deck</th>
+            <th>Minimum</th>
+            <th>Quoted total</th>
+          </tr>
+        </thead>
+        <tbody id="pricing-body"></tbody>
+      </table>
+      <div id="pricing-actions">
+        <button id="save-pricing-btn">Save pricing</button>
+        <span id="pricing-status"></span>
+      </div>
+    </section>
+
+    <h2 style="font-size:1.05rem; margin:0 0 0.5rem">All orders</h2>
     <table id="orders-table">
       <thead>
         <tr>
@@ -75,6 +120,9 @@
     const logoutBtn = document.getElementById('logout-btn');
     const errorDiv = document.getElementById('error');
     const ordersBody = document.getElementById('orders-body');
+    const pricingBody = document.getElementById('pricing-body');
+    const savePricingBtn = document.getElementById('save-pricing-btn');
+    const pricingStatus = document.getElementById('pricing-status');
 
     const STATUSES = ['new', 'wip', 'complete', 'delivered'];
 
@@ -209,17 +257,133 @@
     async function loadOrders() {
       const orders = await api('/api/orders');
       renderOrders(orders);
+    }
+
+    // ---- Pricing ---------------------------------------------------------
+    // The numbers the public form quotes from. Every row carries a per-sheet and
+    // a full-deck price; a quote is always the `base` row plus the row matching
+    // the order's image source, so the editor shows that sum as you type.
+
+    function fmtMoney(value) {
+      return '$' + Number(value || 0).toFixed(2);
+    }
+
+    function moneyInput(value, onInput) {
+      const wrap = document.createElement('div');
+      wrap.className = 'money-cell';
+      const dollar = document.createElement('span');
+      dollar.textContent = '$';
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = '0.01';
+      input.min = '0';
+      input.value = Number(value || 0).toFixed(2);
+      input.addEventListener('input', onInput);
+      wrap.appendChild(dollar);
+      wrap.appendChild(input);
+      return { wrap, input };
+    }
+
+    function refreshPricingTotals() {
+      const baseRow = pricingBody.querySelector('tr[data-id="base"]');
+      const baseSheet = Number(baseRow.querySelector('.per-sheet').value) || 0;
+      const baseDeck = Number(baseRow.querySelector('.per-deck').value) || 0;
+
+      for (const tr of pricingBody.querySelectorAll('tr')) {
+        const cell = tr.querySelector('.total');
+        if (tr.dataset.id === 'base') {
+          cell.textContent = 'applies to every order';
+          continue;
+        }
+        const sheet = baseSheet + (Number(tr.querySelector('.per-sheet').value) || 0);
+        const deck = baseDeck + (Number(tr.querySelector('.per-deck').value) || 0);
+        const from = tr.querySelector('.is-minimum').checked ? 'from ' : '';
+        cell.textContent = `${from}${fmtMoney(sheet)}/sheet · ${from}${fmtMoney(deck)}/deck`;
+      }
+    }
+
+    function renderPricing(rows) {
+      pricingBody.innerHTML = '';
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        tr.dataset.id = row.id;
+
+        const sheet = moneyInput(row.per_sheet, refreshPricingTotals);
+        sheet.input.className = 'per-sheet';
+        const deck = moneyInput(row.per_deck, refreshPricingTotals);
+        deck.input.className = 'per-deck';
+
+        const minimum = document.createElement('input');
+        minimum.type = 'checkbox';
+        minimum.className = 'is-minimum';
+        minimum.checked = !!row.is_minimum;
+        minimum.addEventListener('change', refreshPricingTotals);
+        // The base row is never a quote on its own, so "minimum" has nothing to
+        // qualify there — every quote pairs it with an image-source row.
+        minimum.disabled = row.id === 'base';
+
+        tr.innerHTML = `
+          <td>${escapeHtml(row.label)}</td>
+          <td class="money sheet-cell"></td>
+          <td class="money deck-cell"></td>
+          <td class="flag min-cell"></td>
+          <td class="total"></td>
+        `;
+        tr.querySelector('.sheet-cell').appendChild(sheet.wrap);
+        tr.querySelector('.deck-cell').appendChild(deck.wrap);
+        tr.querySelector('.min-cell').appendChild(minimum);
+        pricingBody.appendChild(tr);
+      }
+      refreshPricingTotals();
+    }
+
+    async function loadPricing() {
+      renderPricing(await api('/api/pricing'));
+    }
+
+    savePricingBtn.addEventListener('click', async () => {
+      const payload = [...pricingBody.querySelectorAll('tr')].map((tr) => ({
+        id: tr.dataset.id,
+        per_sheet: Number(tr.querySelector('.per-sheet').value) || 0,
+        per_deck: Number(tr.querySelector('.per-deck').value) || 0,
+        is_minimum: tr.querySelector('.is-minimum').checked,
+      }));
+
+      savePricingBtn.disabled = true;
+      pricingStatus.textContent = 'Saving…';
+      pricingStatus.className = '';
+      try {
+        renderPricing(await api('/api/pricing', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }));
+        pricingStatus.textContent = 'Saved.';
+        pricingStatus.className = 'ok';
+      } catch (err) {
+        pricingStatus.textContent = 'Could not save: ' + err.message;
+        pricingStatus.className = 'err';
+      } finally {
+        savePricingBtn.disabled = false;
+      }
+    });
+
+    async function loadDashboard() {
+      // Pricing first: it is the smaller request, and a failure on either one
+      // should leave the login panel up rather than a half-drawn dashboard.
+      await loadPricing();
+      await loadOrders();
       showDashboard();
     }
 
     loginBtn.addEventListener('click', async () => {
       setToken(passwordInput.value);
       try {
-        await loadOrders();
+        await loadDashboard();
       } catch (err) {
         // showLogin already called by api() on 401; for other errors, surface them
         if (err.message !== 'Unauthorized') {
-          errorDiv.textContent = 'Something went wrong loading orders.';
+          errorDiv.textContent = 'Something went wrong loading the dashboard.';
         }
       }
     });
@@ -234,7 +398,7 @@
 
     // If a password is already in this tab's session, try it immediately.
     if (getToken()) {
-      loadOrders().catch(() => {});
+      loadDashboard().catch(() => {});
     }
   </script>
 </body>
