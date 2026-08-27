@@ -1,5 +1,5 @@
--- Run once in the Supabase SQL Editor against an existing project.
--- schema.sql already reflects these changes for a fresh one.
+-- Applied on top of 0001 by the GitHub integration. Idempotent, so it lands
+-- cleanly whether or not this was already run by hand in the SQL Editor.
 
 -- The order form quotes a price before submitting, and the admin page edits the
 -- numbers behind it. One row per priced aspect: `base` always applies, and the

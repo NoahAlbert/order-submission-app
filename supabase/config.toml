@@ -1,0 +1,4 @@
+# Identifies the Supabase project that the GitHub integration deploys to.
+# The ref is the subdomain of the project's API URL
+# (https://<project_id>.supabase.co) — it is public, unlike the API keys.
+project_id = "xodrsdykcsloprdwyooh"
