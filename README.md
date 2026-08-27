@@ -33,7 +33,7 @@ dropdowns, scrollbars, the file-picker button — follow the theme as well.
 | Timestamp | app | datetime | auto |
 | Name | client | text | |
 | Status | **you** | enum | `new` / `wip` / `complete` / `delivered` — set by the app to `new` on submit, you change it as the order progresses |
-| Order Size | client | int | number of cards |
+| Order Size | client | int | number of cards; the client picks *Full Commander Deck* (always 100) or *Order by sheet* and enters a sheet count, which the form multiplies by 8 (one sheet = 8 cards) |
 | Img Source Flag | client | enum | `scryfall` / `custom-frames` / `custom-art` / `client` |
 | Frame Style | client | enum | slug of the chosen frame treatment (`extended`, `neon`, …), matching a file in `img/`; set when `Img Source Flag` is `custom-frames` or `custom-art`, blank otherwise |
 | Img Source | app/client | text | Drive link if a file was uploaded, or the link the client pasted; blank if neither |

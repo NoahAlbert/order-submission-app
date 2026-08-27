@@ -137,6 +137,10 @@
   input::placeholder, textarea::placeholder { color: var(--fg-faint); }
   textarea { min-height: 100px; resize: vertical; }
   textarea#cardlist { min-height: 140px; }
+  /* A sheet count is at most a couple of digits, so it doesn't need the full
+     560px the other controls get. */
+  #order_size { width: 7rem; margin-bottom: 0.4rem; }
+  #sheet-math { color: var(--fg-muted); font-size: 0.85rem; margin-bottom: 1rem; }
   button {
     background: var(--btn-bg);
     color: var(--btn-fg);
@@ -415,8 +419,18 @@
     <label for="name">Name</label>
     <input type="text" id="name" name="name" required>
 
-    <label for="order_size">Order Size (number of cards)</label>
-    <input type="number" id="order_size" name="order_size" min="1" step="1" required>
+    <label for="order_size_mode">Order Size</label>
+    <select id="order_size_mode" name="order_size_mode" required>
+      <option value="" disabled selected>Select one</option>
+      <option value="commander">Full Commander Deck</option>
+      <option value="sheets">Order by sheet</option>
+    </select>
+
+    <div id="sheet-count-section" hidden>
+      <label for="order_size">Number of sheets</label>
+      <input type="number" id="order_size" name="order_size" min="1" step="1">
+      <div id="sheet-math" hidden></div>
+    </div>
 
     <label for="img_source_flag">Image Source</label>
     <select id="img_source_flag" name="img_source_flag" required>
@@ -534,6 +548,10 @@
     const lookupStatus = document.getElementById('lookup-status');
     const resultsEl = document.getElementById('lookup-results');
     const imgSourceFlagEl = document.getElementById('img_source_flag');
+    const orderSizeModeEl = document.getElementById('order_size_mode');
+    const orderSizeEl = document.getElementById('order_size');
+    const sheetCountSection = document.getElementById('sheet-count-section');
+    const sheetMathEl = document.getElementById('sheet-math');
     const imageFilesSection = document.getElementById('image-files-section');
     const filenameNote = document.getElementById('filename-note');
     const cardlistSection = document.getElementById('cardlist-section');
@@ -645,6 +663,45 @@
     }
     imgSourceFlagEl.addEventListener('change', updateSourceVisibility);
     updateSourceVisibility();
+
+    // A print sheet holds 8 cards, and a Commander deck is the 100-card format,
+    // so both choices resolve to a plain card count for the sheet.
+    const CARDS_PER_SHEET = 8;
+    const COMMANDER_DECK_CARDS = 100;
+
+    function sheetCount() {
+      const value = parseInt(orderSizeEl.value, 10);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    function updateSheetMath() {
+      const sheets = sheetCount();
+      sheetMathEl.hidden = sheets === null;
+      if (sheets === null) return;
+      sheetMathEl.textContent = sheets + (sheets === 1 ? ' sheet = ' : ' sheets = ')
+        + (sheets * CARDS_PER_SHEET) + ' cards';
+    }
+
+    function updateOrderSizeVisibility() {
+      const bySheet = orderSizeModeEl.value === 'sheets';
+      sheetCountSection.hidden = !bySheet;
+      // Only demand a count when it's the visible way of giving one; a hidden
+      // required field would block submit with nothing to point the user at.
+      orderSizeEl.required = bySheet;
+      if (bySheet) updateSheetMath();
+    }
+
+    // The sheet's Order Size column is a card count, so both modes land there
+    // as one: a Commander deck is 100 cards, and N sheets is N * 8.
+    function resolvedOrderSize() {
+      if (orderSizeModeEl.value === 'commander') return String(COMMANDER_DECK_CARDS);
+      const sheets = sheetCount();
+      return sheets === null ? '' : String(sheets * CARDS_PER_SHEET);
+    }
+
+    orderSizeModeEl.addEventListener('change', updateOrderSizeVisibility);
+    orderSizeEl.addEventListener('input', updateSheetMath);
+    updateOrderSizeVisibility();
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (c) => (
@@ -1259,7 +1316,7 @@
       const usable = lookupIsUsable();
       const data = {
         name: form.name.value,
-        orderSize: form.order_size.value,
+        orderSize: resolvedOrderSize(),
         imgSourceFlag: imgSourceFlag,
         // Gated here so a style picked and then abandoned doesn't leak into the row.
         frameStyle: usesFrameStyles(imgSourceFlag) ? frameStyleInput.value : '',
