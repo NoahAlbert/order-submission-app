@@ -5,32 +5,141 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Order Submission</title>
 <style>
+  /* Dark is the default theme: these are the base tokens, and [data-theme="light"]
+     below overrides them. Defining dark here (rather than in a media query) means
+     the page paints dark before any JS runs, so there is no light flash on load.
+     color-scheme makes native widgets — select dropdowns, scrollbars, the file
+     picker button — follow the theme too. */
+  :root {
+    color-scheme: dark;
+    --bg: #14161a;
+    --surface: #1c1f26;
+    --surface-2: #22262f;
+    --fg: #e8eaed;
+    --fg-muted: #a8adb8;
+    --fg-faint: #7d838f;
+    --border: #333842;
+    --border-strong: #4d545f;
+    --img-placeholder: #2a2e37;
+
+    --btn-bg: #e8eaed;
+    --btn-fg: #14161a;
+
+    --accent: #7aa2e8;
+    --accent-bg: #23304a;
+    --accent-btn: #3d5f9e;
+
+    --success: #5ec97f;
+    --success-bg: #16301f;
+
+    --warn: #e0b862;
+    --warn-bg: #33280f;
+    --warn-border: #4d3d17;
+    --cell-review-bg: #24200f;
+
+    --danger: #f0847a;
+    --danger-bg: #3a1d1a;
+    --cell-unresolved-bg: #2a1a18;
+
+    --purple: #c4a2e8;
+    --purple-bg: #2b2038;
+    --purple-border: #3d2f52;
+
+    --info: #a9c5ee;
+    --info-bg: #1b2534;
+    --info-border: #2c3c52;
+    --info-code-bg: #263449;
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f7f7f8;
+    --fg: #1a1a1a;
+    --fg-muted: #555;
+    --fg-faint: #888;
+    --border: #ddd;
+    --border-strong: #aaa;
+    --img-placeholder: #eee;
+
+    --btn-bg: #1a1a1a;
+    --btn-fg: #ffffff;
+
+    --accent: #3a5a9a;
+    --accent-bg: #e5ebf7;
+    --accent-btn: #3a5a9a;
+
+    --success: #1a7f37;
+    --success-bg: #e3f4e8;
+
+    --warn: #8a6100;
+    --warn-bg: #fdf1d0;
+    --warn-border: #f0dca8;
+    --cell-review-bg: #fffdf5;
+
+    --danger: #c0392b;
+    --danger-bg: #fbe3e0;
+    --cell-unresolved-bg: #fdf6f5;
+
+    --purple: #6b3fa0;
+    --purple-bg: #efe6f7;
+    --purple-border: #e0d2ee;
+
+    --info: #2c4a7c;
+    --info-bg: #eef3fb;
+    --info-border: #cddcf0;
+    --info-code-bg: #dfe8f6;
+  }
+
+  /* No page-level max-width: the card grid is meant to use the full browser
+     width. The plain form controls are capped separately so they stay legible. */
   body {
     font-family: system-ui, -apple-system, sans-serif;
-    max-width: 560px;
-    margin: 3rem auto;
+    margin: 2.5rem auto;
     padding: 0 1.5rem;
-    color: #1a1a1a;
+    color: var(--fg);
+    background: var(--bg);
   }
-  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+  #page-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  h1 { font-size: 1.4rem; margin: 0; }
+  #theme-toggle {
+    background: none;
+    color: var(--fg-muted);
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  #theme-toggle:hover { border-color: var(--border-strong); color: var(--fg); }
   label { display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem; }
-  .hint { font-weight: 400; color: #666; font-size: 0.8rem; margin: -0.2rem 0 0.4rem; }
+  .hint { font-weight: 400; color: var(--fg-muted); font-size: 0.8rem; margin: -0.2rem 0 0.4rem; }
   input, textarea, select {
     width: 100%;
+    max-width: 560px;
     padding: 0.6rem;
     margin-bottom: 1rem;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 1rem;
     box-sizing: border-box;
     font-family: inherit;
-    background: white;
+    background: var(--surface);
+    color: var(--fg);
   }
+  input::placeholder, textarea::placeholder { color: var(--fg-faint); }
   textarea { min-height: 100px; resize: vertical; }
   textarea#cardlist { min-height: 140px; }
   button {
-    background: #1a1a1a;
-    color: white;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
     border: none;
     padding: 0.7rem 1.4rem;
     border-radius: 6px;
@@ -39,21 +148,272 @@
   }
   button:disabled { opacity: 0.6; cursor: default; }
   #status { margin-top: 1rem; font-size: 0.9rem; }
-  #status.success { color: #1a7f37; }
-  #status.error { color: #c0392b; }
-  fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+  #status.success { color: var(--success); }
+  #status.error { color: var(--danger); }
+  fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
   legend { font-weight: 600; font-size: 0.85rem; padding: 0 0.3rem; }
-  fieldset[hidden] { display: none; }
+
+  /* These renders carry a black bleed border, so their true ratio is 640/871
+     (0.735), not a bare card's 63/88 (0.716). Using the card ratio would crop them. */
+  #frame-style-picker {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 1rem;
+    align-items: start;
+    max-width: 900px;
+    margin-bottom: 1rem;
+  }
+  @media (max-width: 700px) {
+    #frame-style-picker { grid-template-columns: 1fr; }
+    #frame-style-preview { max-width: 260px; }
+  }
+  #frame-style-thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+    gap: 0.5rem;
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+  }
+  .frame-thumb {
+    background: none;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 2px;
+    cursor: pointer;
+    width: 100%;
+    color: inherit;
+  }
+  .frame-thumb:hover { border-color: var(--border-strong); }
+  .frame-thumb.selected { border-color: var(--accent); background: var(--accent-bg); }
+  .frame-thumb img {
+    width: 100%;
+    aspect-ratio: 640 / 871;
+    object-fit: cover;
+    border-radius: 3%;
+    display: block;
+    background: var(--img-placeholder);
+  }
+  .frame-thumb-label {
+    display: block;
+    font-size: 0.62rem;
+    color: var(--fg-muted);
+    margin-top: 0.2rem;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  #frame-style-preview { margin: 0; position: sticky; top: 1rem; }
+  #frame-preview-img {
+    width: 100%;
+    aspect-ratio: 640 / 871;
+    object-fit: cover;
+    border-radius: 3%;
+    display: block;
+    background: var(--img-placeholder);
+    border: 1px solid var(--border);
+  }
+  #frame-preview-img:not([src]) { visibility: hidden; }
+  #frame-preview-label {
+    font-size: 0.8rem;
+    color: var(--fg-muted);
+    text-align: center;
+    margin-top: 0.4rem;
+  }
+
+  #filename-note {
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--info);
+    background: var(--info-bg);
+    border: 1px solid var(--info-border);
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.9rem;
+    max-width: 560px;
+  }
+  #filename-note code {
+    background: var(--info-code-bg);
+    border-radius: 3px;
+    padding: 0.05rem 0.25rem;
+    font-size: 0.95em;
+  }
+
+  #lookup-btn { background: var(--accent-btn); color: #fff; padding: 0.5rem 1rem; font-size: 0.9rem; }
+  #lookup-status { font-size: 0.85rem; color: var(--fg-muted); margin: 0.6rem 0; }
+  #lookup-status.error { color: var(--danger); }
+
+  #lookup-results { margin-bottom: 1.5rem; }
+  #lookup-results.stale { opacity: 0.45; }
+  #lookup-summary { font-size: 0.85rem; color: var(--fg-muted); margin-bottom: 0.6rem; }
+  #stale-notice {
+    font-size: 0.85rem;
+    color: var(--warn);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 6px;
+    padding: 0.5rem 0.7rem;
+    margin-bottom: 0.8rem;
+  }
+
+  #card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 1.1rem;
+  }
+
+  .card-cell {
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem;
+    background: var(--surface);
+  }
+  .card-cell[data-status="matched"] { border-top-color: var(--success); }
+  .card-cell[data-status="review"] { border-top-color: var(--warn); background: var(--cell-review-bg); }
+  .card-cell[data-status="picked"] { border-top-color: var(--accent); }
+  .card-cell[data-status="unresolved"] { border-top-color: var(--danger); background: var(--cell-unresolved-bg); }
+
+  /* Resolved cells are clickable anywhere to open the printing picker. */
+  .card-cell:not([data-status="unresolved"]) { cursor: pointer; }
+  .card-cell:not([data-status="unresolved"]):hover { border-color: var(--border-strong); }
+  .card-cell:not([data-status="unresolved"]):hover .hint-inline { color: var(--accent); text-decoration: underline; }
+
+  /* Real cards are 63x88mm; matching that keeps the art undistorted. */
+  .card-art {
+    width: 100%;
+    aspect-ratio: 63 / 88;
+    object-fit: cover;
+    border-radius: 4.75% / 3.5%;
+    display: block;
+    background: var(--img-placeholder);
+  }
+  .card-art-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--fg-faint);
+    font-size: 2rem;
+    border: 1px dashed var(--border);
+    box-sizing: border-box;
+  }
+  .card-cell-name { font-weight: 600; font-size: 0.9rem; margin-top: 0.55rem; line-height: 1.25; }
+  .card-cell-name .qty { color: var(--fg-muted); font-weight: 400; }
+  .card-cell-print { font-size: 0.78rem; color: var(--fg-muted); margin-top: 0.2rem; line-height: 1.3; }
+  .card-cell-note { font-size: 0.75rem; color: var(--warn); margin-top: 0.25rem; line-height: 1.3; }
+  .card-cell-actions { margin-top: 0.45rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .hint-inline { font-size: 0.72rem; color: var(--fg-faint); }
+
+  .badge {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .badge-matched { background: var(--success-bg); color: var(--success); }
+  .badge-review { background: var(--warn-bg); color: var(--warn); }
+  .badge-unresolved { background: var(--danger-bg); color: var(--danger); }
+  .badge-picked { background: var(--accent-bg); color: var(--accent); }
+  .badge-frame { background: var(--purple-bg); color: var(--purple); }
+
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    padding: 0;
+    font-size: 0.82rem;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .card-cell-retry { margin-top: 0.5rem; display: flex; gap: 0.35rem; }
+  .card-cell-retry input {
+    margin-bottom: 0;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+    max-width: none;
+    min-width: 0;
+  }
+  .card-cell-retry button { padding: 0.35rem 0.6rem; font-size: 0.8rem; flex-shrink: 0; }
+
+  /* Spans every column so the picker gets the full width, not one cell's worth. */
+  .printing-panel { grid-column: 1 / -1; }
+  .printing-panel-inner {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem;
+    background: var(--surface-2);
+  }
+  .printing-panel-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.7rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  /* A wrapping grid rather than a scrolling row — cards with dozens of arts
+     (Lightning Bolt has 40+) stay scannable instead of hiding most behind a scrollbar. */
+  .printing-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.7rem;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+  }
+  .printing-panel .loading { font-size: 0.85rem; color: var(--fg-muted); }
+  .panel-section { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }
+  .panel-section-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; }
+  .frame-select { max-width: 320px; margin-bottom: 0; }
+  #frame-override-notice {
+    font-size: 0.85rem;
+    color: var(--purple);
+    background: var(--purple-bg);
+    border: 1px solid var(--purple-border);
+    border-radius: 6px;
+    padding: 0.5rem 0.7rem;
+    margin-bottom: 0.8rem;
+  }
+  #frame-override-notice .link-btn { color: var(--purple); }
+  .print-option {
+    background: none;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 3px;
+    cursor: pointer;
+    width: 100%;
+    color: inherit;
+  }
+  .print-option:hover { border-color: var(--border-strong); }
+  .print-option.selected { border-color: var(--accent); background: var(--accent-bg); }
+  .print-option img {
+    width: 100%;
+    aspect-ratio: 63 / 88;
+    object-fit: cover;
+    border-radius: 4.75% / 3.5%;
+    display: block;
+    background: var(--img-placeholder);
+  }
+  .print-option-label {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--fg-muted);
+    margin-top: 0.25rem;
+    line-height: 1.25;
+    word-break: break-word;
+  }
 </style>
 </head>
 <body>
-  <h1>Order Submission</h1>
+  <div id="page-head">
+    <h1>Order Submission</h1>
+    <button type="button" id="theme-toggle">☀ Light</button>
+  </div>
   <form id="order-form">
     <label for="name">Name</label>
     <input type="text" id="name" name="name" required>
-
-    <label for="email">Email</label>
-    <input type="email" id="email" name="email" required>
 
     <label for="order_size">Order Size (number of cards)</label>
     <input type="number" id="order_size" name="order_size" min="1" step="1" required>
@@ -63,21 +423,48 @@
       <option value="" disabled selected>Select one</option>
       <option value="scryfall">Scryfall</option>
       <option value="custom-frames">Custom Frames</option>
-      <option value="custom-art">Custom Art</option>
+      <option value="custom-art">Full Custom</option>
       <option value="client">I'm providing my own images</option>
     </select>
 
-    <fieldset id="img_source_fieldset" hidden>
-      <legend>Image Files</legend>
+    <div id="frame-style-section" hidden>
+      <label>Frame Style</label>
+      <div class="hint">Applies to every card in this order. Hover to preview, click to choose.</div>
+      <div id="frame-style-picker">
+        <div id="frame-style-thumbs"></div>
+        <figure id="frame-style-preview">
+          <img id="frame-preview-img" alt="">
+          <figcaption id="frame-preview-label">Hover a style to preview it</figcaption>
+        </figure>
+      </div>
+      <input type="hidden" id="frame_style" name="frame_style">
+    </div>
+
+    <fieldset id="image-files-section" hidden>
+      <legend>Image Files (only needed if you're providing your own)</legend>
+      <div id="filename-note" hidden>
+        <strong>Name each image file after its card</strong> — <code>Lightning Bolt.png</code>,
+        <code>Sol Ring.jpg</code>. That's how we match your art to the card list below.
+        If a card needs more than one different art, number them:
+        <code>Lightning Bolt 2.png</code>.
+      </div>
       <label for="img_source_file">Upload a zip/compressed folder (under ~25MB)</label>
       <input type="file" id="img_source_file" name="img_source_file" accept=".zip,.rar,.7z">
-      <label for="img_source_link">Or paste a link (Drive/Dropbox/WeTransfer) for larger files</label>
+      <label for="img_source_link">Or paste a link (Drive/Dropbox/WeTransfer/Wormhole) for larger files</label>
       <input type="url" id="img_source_link" name="img_source_link" placeholder="https://...">
     </fieldset>
 
-    <label for="cardlist">Card List</label>
-    <div class="hint">One card per line.</div>
-    <textarea id="cardlist" name="cardlist" required></textarea>
+    <div id="cardlist-section">
+      <label for="cardlist">Card List</label>
+      <div class="hint">
+        One card per line. Add a set code to pick a printing automatically —
+        <code>4 Lightning Bolt (2XM) 129</code> or <code>2 Counterspell [MH2]</code>.
+      </div>
+      <textarea id="cardlist" name="cardlist" required></textarea>
+      <button type="button" id="lookup-btn">Look Up Cards</button>
+      <div id="lookup-status"></div>
+      <div id="lookup-results"></div>
+    </div>
 
     <label for="custom_requests">Custom Requests / Notes</label>
     <div class="hint">Optional. Anything else we should know about this order.</div>
@@ -88,28 +475,746 @@
   </form>
 
   <script>
-    const ENDPOINT_URL = '/api/orders';
+    // Paste your Google Apps Script Web App URL here after deploying it (see README.md).
+    const ENDPOINT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
     const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB safety limit for direct upload
+    const SCRYFALL = 'https://api.scryfall.com';
+    const COLLECTION_BATCH = 75; // Scryfall's hard cap per /cards/collection request
+    const SOURCES_REQUIRING_LOOKUP = ['scryfall', 'custom-frames'];
+    // Full Custom supplies its own art but still gets printed in one of our
+    // frame treatments, so it uses the same frame selection as Custom Frames.
+    const SOURCES_WITH_FRAMES = ['custom-frames', 'custom-art'];
+
+    function usesFrameStyles(value) {
+      return SOURCES_WITH_FRAMES.includes(value);
+    }
+
+    // Hardcoded because there is no build step and file:// cannot list a directory.
+    // The slug is both the submitted value and the image filename (img/<slug>.jpg).
+    const FRAME_STYLES = [
+      ['normal', 'Normal'], ['classic', 'Classic'], ['classic-token', 'Classic Token'],
+      ['extended', 'Extended Art'], ['borderless-vector', 'Borderless Vector'],
+      ['colorshifted', 'Colorshifted'], ['crimson-fang', 'Crimson Fang'],
+      ['double-feature', 'Double Feature'], ['etched', 'Etched'], ['expedition', 'Expedition'],
+      ['kaldheim', 'Kaldheim'], ['masterpiece', 'Masterpiece'], ['neon', 'Neon'],
+      ['ninja', 'Ninja'], ['phyrexian', 'Phyrexian'], ['ring', 'Ring'], ['sketch', 'Sketch'],
+      ['snow', 'Snow'], ['stained-glass', 'Stained Glass'], ['stargazing', 'Stargazing'],
+    ];
+
+    // Dark is the default; :root already paints it, so this only has to handle
+    // a stored preference and the toggle. localStorage throws in some privacy
+    // modes, so every access is guarded — the page must still work without it.
+    const THEME_KEY = 'mtgprint-theme';
+    const themeToggle = document.getElementById('theme-toggle');
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      themeToggle.textContent = theme === 'dark' ? '☀ Light' : '☾ Dark';
+      themeToggle.setAttribute(
+        'aria-label',
+        theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+      );
+    }
+
+    let storedTheme = null;
+    try { storedTheme = localStorage.getItem(THEME_KEY); } catch (err) { /* unavailable */ }
+    applyTheme(storedTheme === 'light' ? 'light' : 'dark');
+
+    themeToggle.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (err) { /* unavailable */ }
+    });
 
     const form = document.getElementById('order-form');
     const status = document.getElementById('status');
-    const button = form.querySelector('button');
-    const imgSourceFlagSelect = document.getElementById('img_source_flag');
-    const imgSourceFieldset = document.getElementById('img_source_fieldset');
+    const button = form.querySelector('button[type="submit"]');
+    const cardlistEl = document.getElementById('cardlist');
+    const lookupBtn = document.getElementById('lookup-btn');
+    const lookupStatus = document.getElementById('lookup-status');
+    const resultsEl = document.getElementById('lookup-results');
+    const imgSourceFlagEl = document.getElementById('img_source_flag');
+    const imageFilesSection = document.getElementById('image-files-section');
+    const filenameNote = document.getElementById('filename-note');
+    const cardlistSection = document.getElementById('cardlist-section');
+    const frameStyleSection = document.getElementById('frame-style-section');
+    const frameThumbsEl = document.getElementById('frame-style-thumbs');
+    const framePreviewImg = document.getElementById('frame-preview-img');
+    const framePreviewLabel = document.getElementById('frame-preview-label');
+    const frameStyleInput = document.getElementById('frame_style');
 
-    // Dynamic form: the image-upload/link fieldset only matters when the
-    // client is providing their own images. Hide it otherwise, and clear
-    // any values left in it so they don't get submitted by mistake.
-    function updateImgSourceVisibility() {
-      const isClientProvided = imgSourceFlagSelect.value === 'client';
-      imgSourceFieldset.hidden = !isClientProvided;
-      if (!isClientProvided) {
-        form.img_source_file.value = '';
-        form.img_source_link.value = '';
+    let lookupRows = null;
+    let lookupStale = false;
+    let framesBuilt = false;
+    const printingsCache = new Map();
+
+    function frameImagePath(slug) {
+      return 'img/' + slug + '.jpg';
+    }
+
+    // img/ is ~11.7MB, so the thumbnails are only built the first time Custom
+    // Frames is chosen — most visitors never load a single one.
+    function ensureFrameThumbs() {
+      if (framesBuilt) return;
+      framesBuilt = true;
+      frameThumbsEl.innerHTML = FRAME_STYLES.map(([slug, label]) => (
+        '<button type="button" class="frame-thumb" data-style="' + escapeHtml(slug) + '">' +
+          '<img src="' + escapeHtml(frameImagePath(slug)) + '" alt="" loading="lazy">' +
+          '<span class="frame-thumb-label">' + escapeHtml(label) + '</span>' +
+        '</button>'
+      )).join('');
+    }
+
+    function frameStyleLabel(slug) {
+      const entry = FRAME_STYLES.find(([value]) => value === slug);
+      return entry ? entry[1] : slug;
+    }
+
+    // The order-level style is a default; a row only overrides it when set.
+    function effectiveFrameStyle(row) {
+      return row.frameStyle || frameStyleInput.value;
+    }
+
+    function isFrameOverridden(row) {
+      return Boolean(row.frameStyle) && row.frameStyle !== frameStyleInput.value;
+    }
+
+    function showFramePreview(slug, label) {
+      framePreviewImg.src = frameImagePath(slug);
+      framePreviewLabel.textContent = label;
+    }
+
+    // Reverts a transient hover preview back to whatever is actually selected.
+    function restoreFramePreview() {
+      const selected = FRAME_STYLES.find(([slug]) => slug === frameStyleInput.value);
+      if (selected) {
+        showFramePreview(selected[0], selected[1]);
+      } else {
+        framePreviewImg.removeAttribute('src');
+        framePreviewLabel.textContent = 'Hover a style to preview it';
       }
     }
-    imgSourceFlagSelect.addEventListener('change', updateImgSourceVisibility);
-    updateImgSourceVisibility();
+
+    function frameStyleFor(el) {
+      const btn = el && el.closest ? el.closest('.frame-thumb') : null;
+      if (!btn) return null;
+      const slug = btn.dataset.style;
+      const entry = FRAME_STYLES.find(([value]) => value === slug);
+      return entry ? { btn, slug: entry[0], label: entry[1] } : null;
+    }
+
+    // mouseover and focusin both preview, so the picker works by pointer or keyboard.
+    frameThumbsEl.addEventListener('mouseover', (e) => {
+      const hit = frameStyleFor(e.target);
+      if (hit) showFramePreview(hit.slug, hit.label);
+    });
+    frameThumbsEl.addEventListener('focusin', (e) => {
+      const hit = frameStyleFor(e.target);
+      if (hit) showFramePreview(hit.slug, hit.label);
+    });
+    frameThumbsEl.addEventListener('mouseleave', restoreFramePreview);
+
+    frameThumbsEl.addEventListener('click', (e) => {
+      const hit = frameStyleFor(e.target);
+      if (!hit) return;
+      frameStyleInput.value = hit.slug;
+      frameThumbsEl.querySelectorAll('.frame-thumb.selected')
+        .forEach((el) => el.classList.remove('selected'));
+      hit.btn.classList.add('selected');
+      showFramePreview(hit.slug, hit.label);
+      // Overrides survive a default change, so re-render to re-evaluate which
+      // cards still count as deviating from the new default.
+      if (lookupRows) renderResults();
+    });
+
+    // "I'm providing my own images" replaces the card list with an upload/link.
+    // "Full Custom" needs both: a card list to know what to print, plus the art for it.
+    function updateSourceVisibility() {
+      const value = imgSourceFlagEl.value;
+      const isClient = value === 'client';
+      const hasFrames = usesFrameStyles(value);
+      imageFilesSection.hidden = !(isClient || value === 'custom-art');
+      // Only meaningful for Full Custom: it's the one source that pairs uploaded
+      // art with a card list, so filenames are what tie the two together.
+      // "I'm providing my own images" hides the card list, leaving nothing to match.
+      filenameNote.hidden = value !== 'custom-art';
+      cardlistSection.hidden = isClient;
+      cardlistEl.required = !isClient;
+      frameStyleSection.hidden = !hasFrames;
+      if (hasFrames) ensureFrameThumbs();
+    }
+    imgSourceFlagEl.addEventListener('change', updateSourceVisibility);
+    updateSourceVisibility();
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    // Scryfall asks for 50-100ms between requests, so every call goes through one queue.
+    let queueTail = Promise.resolve();
+    function enqueue(fn) {
+      const result = queueTail.then(fn);
+      queueTail = result.catch(() => {}).then(() => sleep(100));
+      return result;
+    }
+
+    function scryfallFetch(url, options) {
+      return enqueue(async () => {
+        const res = await fetch(url, Object.assign({}, options, {
+          headers: Object.assign({ Accept: 'application/json' }, options && options.headers),
+        }));
+        return res.json();
+      });
+    }
+
+    const SECTION_HEADERS = new Set([
+      'deck', 'deckbox', 'sideboard', 'sidebar', 'commander',
+      'maybeboard', 'companion', 'tokens', 'main', 'mainboard',
+    ]);
+
+    function parseCardLines(text) {
+      const rows = [];
+      for (const rawLine of text.split('\n')) {
+        const raw = rawLine.trim();
+        if (!raw) continue;
+        // Only a leading `//` is a comment — `Fire // Ice` is a real card name.
+        if (raw.startsWith('//') || raw.startsWith('#')) continue;
+        if (SECTION_HEADERS.has(raw.toLowerCase())) continue;
+
+        let rest = raw.replace(/\s*\*[^*]*\*\s*$/, '').trim(); // drop Moxfield's *F* foil marker
+
+        let quantity = 1;
+        const qtyMatch = rest.match(/^(\d+)\s*[xX]?\s+/);
+        if (qtyMatch) {
+          quantity = parseInt(qtyMatch[1], 10) || 1;
+          rest = rest.slice(qtyMatch[0].length).trim();
+        }
+
+        let setCode = null;
+        let collectorNumber = null;
+        const setMatch = rest.match(/\s*[([]([A-Za-z0-9]{2,6})[)\]]\s*([A-Za-z0-9-]+(?:\s*★)?)?\s*$/);
+        if (setMatch) {
+          setCode = setMatch[1].toLowerCase();
+          collectorNumber = setMatch[2] ? setMatch[2].replace(/\s+/g, '') : null;
+          rest = rest.slice(0, setMatch.index).trim();
+        }
+
+        if (!rest) continue;
+        // frameStyle null means "follow the order-level default" — storing null
+        // rather than copying the default is what lets a later change to the
+        // default flow through to cards the client never touched.
+        rows.push({
+          raw, quantity, name: rest, setCode, collectorNumber,
+          card: null, status: 'unresolved', frameStyle: null,
+        });
+      }
+      return rows;
+    }
+
+    // Double-faced layouts carry art on card_faces instead of a top-level image_uris.
+    function imageFor(card, size) {
+      if (card.image_uris && card.image_uris[size]) return card.image_uris[size];
+      if (card.card_faces) {
+        for (const face of card.card_faces) {
+          if (face.image_uris && face.image_uris[size]) return face.image_uris[size];
+        }
+      }
+      return '';
+    }
+
+    function printImage(card) {
+      return imageFor(card, 'png') || imageFor(card, 'large') || imageFor(card, 'normal');
+    }
+
+    function nameMatches(card, name) {
+      const wanted = name.toLowerCase();
+      const full = card.name.toLowerCase();
+      return full === wanted || full.split(' // ')[0] === wanted;
+    }
+
+    function identifierFor(row) {
+      if (row.setCode && row.collectorNumber) {
+        return { set: row.setCode, collector_number: row.collectorNumber };
+      }
+      if (row.setCode) return { name: row.name, set: row.setCode };
+      return { name: row.name };
+    }
+
+    // /cards/collection does not promise result order, so match cards back to rows by field.
+    function findCard(row, cards) {
+      return cards.find((card) => {
+        if (row.setCode && row.collectorNumber) {
+          return card.set === row.setCode && card.collector_number === row.collectorNumber;
+        }
+        if (row.setCode) return card.set === row.setCode && nameMatches(card, row.name);
+        return nameMatches(card, row.name);
+      }) || null;
+    }
+
+    // "matched" means we actually honoured the requested set — never just that one was asked for.
+    function assignCard(row, card, userPicked) {
+      row.card = card;
+      if (userPicked) row.status = 'picked';
+      else if (row.setCode && card.set === row.setCode) row.status = 'matched';
+      else row.status = 'review';
+    }
+
+    async function fuzzyLookup(name) {
+      const result = await scryfallFetch(SCRYFALL + '/cards/named?fuzzy=' + encodeURIComponent(name));
+      return result && result.object === 'card' ? result : null;
+    }
+
+    async function resolveInto(rows) {
+      for (let i = 0; i < rows.length; i += COLLECTION_BATCH) {
+        const batch = rows.slice(i, i + COLLECTION_BATCH);
+        const result = await scryfallFetch(SCRYFALL + '/cards/collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifiers: batch.map(identifierFor) }),
+        });
+        const cards = (result && result.data) || [];
+        for (const row of batch) {
+          const card = findCard(row, cards);
+          if (card) assignCard(row, card, false);
+        }
+      }
+    }
+
+    async function runLookup() {
+      const rows = parseCardLines(cardlistEl.value);
+      if (!rows.length) {
+        lookupStatus.textContent = 'Nothing to look up — add some cards first.';
+        lookupStatus.className = 'error';
+        return;
+      }
+
+      lookupBtn.disabled = true;
+      lookupStatus.className = '';
+      lookupStatus.textContent = 'Looking up ' + rows.length + ' card' + (rows.length === 1 ? '' : 's') + '...';
+      resultsEl.innerHTML = '';
+
+      try {
+        await resolveInto(rows);
+
+        // A stale collector number resolves to a real card of the wrong name
+        // (2XM 129 is Grim Lavamancer, not Lightning Bolt), so trust the name
+        // over the number and re-resolve those against the set alone.
+        const mismatched = rows.filter((row) => (
+          row.card && row.collectorNumber && !nameMatches(row.card, row.name)
+        ));
+        for (const row of mismatched) {
+          row.card = null;
+          row.collectorNumber = null;
+        }
+        if (mismatched.length) await resolveInto(mismatched);
+
+        // Anything unmatched gets one fuzzy retry, which rescues most typos.
+        const misses = rows.filter((row) => !row.card);
+        for (const row of misses) {
+          const card = await fuzzyLookup(row.name);
+          if (!card) continue;
+          row.name = card.name;
+          assignCard(row, card, false);
+        }
+
+        // Fuzzy ignores the requested set, so retry those now that the name is
+        // spelled correctly — otherwise a typo silently discards a valid set code.
+        const setRetry = rows.filter((row) => row.card && row.setCode && row.card.set !== row.setCode);
+        if (setRetry.length) await resolveInto(setRetry);
+
+        lookupRows = rows;
+        lookupStale = false;
+        lookupStatus.textContent = '';
+        renderResults();
+      } catch (err) {
+        lookupStatus.textContent = 'Card lookup failed. Check your connection and try again.';
+        lookupStatus.className = 'error';
+      } finally {
+        lookupBtn.disabled = false;
+      }
+    }
+
+    function printingLabel(card) {
+      const year = (card.released_at || '').slice(0, 4);
+      return card.set_name + ' (' + card.set.toUpperCase() + ') · ' + card.collector_number +
+        (year ? ' · ' + year : '');
+    }
+
+    const BADGES = {
+      matched: 'matched',
+      review: 'review',
+      picked: 'your pick',
+      unresolved: 'not found',
+    };
+
+    function setNote(row) {
+      if (!row.setCode || !row.card || row.card.set === row.setCode) return '';
+      if (row.status === 'picked') return '';
+      return '<div class="card-cell-note">No ' + escapeHtml(row.name) + ' in ' +
+        escapeHtml(row.setCode.toUpperCase()) + ' — showing the newest printing instead.</div>';
+    }
+
+    // Badged only when it deviates, so the exceptions stand out instead of the
+    // same label repeating across every cell in the grid.
+    function frameBadgeHtml(row) {
+      if (!isFrameOverridden(row)) return '';
+      return '<span class="badge badge-frame">' + escapeHtml(frameStyleLabel(row.frameStyle)) + '</span>';
+    }
+
+    // Each cell is followed by its own full-width panel, so an expanded picker
+    // pushes the grid open beneath the card it belongs to.
+    function cellHtml(row, index) {
+      const panel = '<div class="printing-panel" data-panel="' + index + '" hidden></div>';
+      const qty = ' <span class="qty">×' + row.quantity + '</span>';
+
+      if (!row.card) {
+        return '<div class="card-cell" data-index="' + index + '" data-status="unresolved">' +
+          '<div class="card-art card-art-empty">?</div>' +
+          '<div class="card-cell-name">' + escapeHtml(row.name) + qty + '</div>' +
+          '<div class="card-cell-print">No card matched this line.</div>' +
+          '<div class="card-cell-actions"><span class="badge badge-unresolved">' + BADGES.unresolved + '</span></div>' +
+          '<div class="card-cell-retry">' +
+            '<input type="text" class="retry-input" value="' + escapeHtml(row.name) + '">' +
+            '<button type="button" data-action="retry">Find</button>' +
+          '</div>' +
+        '</div>' + panel;
+      }
+
+      return '<div class="card-cell" data-index="' + index + '" data-status="' + row.status + '">' +
+        '<img class="card-art" src="' + escapeHtml(imageFor(row.card, 'normal')) + '" alt="" loading="lazy">' +
+        '<div class="card-cell-name">' + escapeHtml(row.card.name) + qty + '</div>' +
+        '<div class="card-cell-print">' + escapeHtml(printingLabel(row.card)) + '</div>' +
+        setNote(row) +
+        '<div class="card-cell-actions">' +
+          '<span class="badge badge-' + row.status + '">' + BADGES[row.status] + '</span>' +
+          frameBadgeHtml(row) +
+          '<span class="hint-inline">click to change printing</span>' +
+        '</div>' +
+      '</div>' + panel;
+    }
+
+    function summaryText() {
+      const total = lookupRows.reduce((sum, row) => sum + row.quantity, 0);
+      const counts = { matched: 0, review: 0, picked: 0, unresolved: 0 };
+      for (const row of lookupRows) counts[row.status]++;
+      const parts = [lookupRows.length + ' lines · ' + total + ' cards'];
+      if (counts.matched) parts.push(counts.matched + ' matched');
+      if (counts.picked) parts.push(counts.picked + ' hand-picked');
+      if (counts.review) parts.push(counts.review + ' to review');
+      if (counts.unresolved) parts.push(counts.unresolved + ' not found');
+      return parts.join(' · ');
+    }
+
+    function renderResults() {
+      if (!lookupRows) {
+        resultsEl.innerHTML = '';
+        return;
+      }
+      resultsEl.className = lookupStale ? 'stale' : '';
+      resultsEl.innerHTML =
+        (lookupStale ? '<div id="stale-notice">Card list changed — run Look Up Cards again.</div>' : '') +
+        '<div id="lookup-summary">' + escapeHtml(summaryText()) + '</div>' +
+        overrideNoticeHtml() +
+        '<div id="card-grid">' + lookupRows.map(cellHtml).join('') + '</div>';
+    }
+
+    function refreshCell(index) {
+      const cellEl = resultsEl.querySelector('.card-cell[data-index="' + index + '"]');
+      if (!cellEl) return;
+      const row = lookupRows[index];
+      cellEl.dataset.status = row.status;
+      cellEl.querySelector('.card-art').src = imageFor(row.card, 'normal');
+      cellEl.querySelector('.card-cell-print').textContent = printingLabel(row.card);
+      const note = cellEl.querySelector('.card-cell-note');
+      if (note) note.remove();
+      const badge = cellEl.querySelector('.badge');
+      badge.className = 'badge badge-' + row.status;
+      badge.textContent = BADGES[row.status];
+      const summary = document.getElementById('lookup-summary');
+      if (summary) summary.textContent = summaryText();
+    }
+
+    // Updates just this cell's frame badge. Deliberately not a renderResults()
+    // call: that rebuilds resultsEl and would slam the open panel shut the
+    // instant the client picked a style from the dropdown inside it.
+    function refreshFrameBadge(index) {
+      const cellEl = resultsEl.querySelector('.card-cell[data-index="' + index + '"]');
+      if (!cellEl) return;
+      const actions = cellEl.querySelector('.card-cell-actions');
+      const existing = actions.querySelector('.badge-frame');
+      if (existing) existing.remove();
+      const html = frameBadgeHtml(lookupRows[index]);
+      if (!html) return;
+      actions.querySelector('.badge').insertAdjacentHTML('afterend', html);
+    }
+
+    function overrideCount() {
+      if (!lookupRows) return 0;
+      return lookupRows.filter(isFrameOverridden).length;
+    }
+
+    function overrideNoticeHtml() {
+      const count = overrideCount();
+      if (!count || !usesFrameStyles(imgSourceFlagEl.value)) return '';
+      const defaultLabel = frameStyleLabel(frameStyleInput.value);
+      return '<div id="frame-override-notice">' +
+        count + (count === 1 ? ' card uses' : ' cards use') + ' their own frame style. ' +
+        '<button type="button" class="link-btn" id="apply-frame-to-all">Apply ' +
+          escapeHtml(defaultLabel) + ' to all</button>' +
+      '</div>';
+    }
+
+    function refreshOverrideNotice() {
+      const existing = document.getElementById('frame-override-notice');
+      const html = overrideNoticeHtml();
+      if (existing && !html) {
+        existing.remove();
+        return;
+      }
+      if (!html) return;
+      if (existing) {
+        existing.outerHTML = html;
+        return;
+      }
+      const summary = document.getElementById('lookup-summary');
+      if (summary) summary.insertAdjacentHTML('afterend', html);
+    }
+
+    async function fetchPrintings(card) {
+      const key = card.oracle_id || card.name;
+      if (printingsCache.has(key)) return printingsCache.get(key);
+
+      const all = [];
+      let url = card.prints_search_uri;
+      while (url) {
+        const page = await scryfallFetch(url);
+        if (!page || !page.data) break;
+        all.push.apply(all, page.data);
+        url = page.has_more ? page.next_page : null;
+      }
+      printingsCache.set(key, all);
+      return all;
+    }
+
+    function isFoilOnly(card) {
+      if (Array.isArray(card.finishes)) return !card.finishes.includes('nonfoil');
+      return card.nonfoil === false;
+    }
+
+    // Double-faced cards carry illustration_id per face rather than at the top level.
+    function illustrationId(card) {
+      if (card.illustration_id) return card.illustration_id;
+      if (card.card_faces) {
+        return card.card_faces.map((face) => face.illustration_id || '').join('+');
+      }
+      return '';
+    }
+
+    // Everything that changes how the printed card actually looks. Art alone is
+    // not enough: the same illustration ships in 1997/2003/2015 frames, full-art,
+    // and inverted/etched treatments that are all visually distinct cards.
+    function visualKey(card) {
+      return [
+        illustrationId(card),
+        card.set,
+        card.frame || '',
+        (card.frame_effects || []).slice().sort().join('+'),
+        card.border_color || '',
+        card.full_art ? 'fullart' : '',
+        card.textless ? 'textless' : '',
+      ].join('|');
+    }
+
+    // Scryfall scans don't render the foil shine, so a foil-only printing that
+    // matches a non-foil one on every visual attribute is a pure duplicate here.
+    // The current selection is always kept so the strip can mark it selected.
+    function filterFoilDuplicates(printings, keepId) {
+      const nonFoilKeys = new Set();
+      for (const print of printings) {
+        if (!isFoilOnly(print)) nonFoilKeys.add(visualKey(print));
+      }
+      return printings.filter((print) => (
+        print.id === keepId || !isFoilOnly(print) || !nonFoilKeys.has(visualKey(print))
+      ));
+    }
+
+    function panelShell(body) {
+      return '<div class="printing-panel-inner">' + body + '</div>';
+    }
+
+    // Only meaningful where we supply the frame; Scryfall and client-supplied
+    // images already carry their own.
+    function frameSectionHtml(row) {
+      if (!usesFrameStyles(imgSourceFlagEl.value)) return '';
+      const defaultLabel = frameStyleInput.value
+        ? frameStyleLabel(frameStyleInput.value)
+        : 'none chosen yet';
+      const options = ['<option value="">Use order default (' + escapeHtml(defaultLabel) + ')</option>']
+        .concat(FRAME_STYLES.map(([slug, label]) => (
+          '<option value="' + escapeHtml(slug) + '"' +
+            (row.frameStyle === slug ? ' selected' : '') + '>' + escapeHtml(label) + '</option>'
+        )))
+        .join('');
+      return '<div class="panel-section">' +
+        '<div class="panel-section-title">Frame Style</div>' +
+        '<select class="frame-select">' + options + '</select>' +
+      '</div>';
+    }
+
+    function stripHtml(row, card, printings, hiddenCount) {
+      const hidden = hiddenCount
+        ? ' · ' + hiddenCount + ' foil duplicate' + (hiddenCount === 1 ? '' : 's') + ' hidden'
+        : '';
+      const title = '<div class="printing-panel-title"><span>' + escapeHtml(card.name) +
+        ' — ' + printings.length + ' printing' + (printings.length === 1 ? '' : 's') + hidden + '</span>' +
+        '<button type="button" class="link-btn" data-action="close">close</button></div>';
+      const options = printings.map((print, i) => {
+        const selected = print.id === card.id ? ' selected' : '';
+        const year = (print.released_at || '').slice(0, 4);
+        return '<button type="button" class="print-option' + selected + '" data-print="' + i + '">' +
+          '<img src="' + escapeHtml(imageFor(print, 'small')) + '" alt="" loading="lazy">' +
+          '<span class="print-option-label">' +
+            escapeHtml(print.set.toUpperCase() + ' · ' + print.collector_number + (year ? ' · ' + year : '')) +
+          '</span></button>';
+      }).join('');
+      return panelShell(
+        title + '<div class="printing-strip">' + options + '</div>' + frameSectionHtml(row)
+      );
+    }
+
+    function closePanels() {
+      resultsEl.querySelectorAll('.printing-panel').forEach((panel) => {
+        panel.hidden = true;
+        panel.innerHTML = '';
+      });
+    }
+
+    async function openPanel(index, row) {
+      const panel = resultsEl.querySelector('.printing-panel[data-panel="' + index + '"]');
+      const wasOpen = !panel.hidden;
+      closePanels();
+      if (wasOpen) return;
+
+      panel.hidden = false;
+      panel.innerHTML = panelShell('<span class="loading">Loading printings...</span>');
+      try {
+        const printings = await fetchPrintings(row.card);
+        // Filter before storing: data-print indexes into row.printings.
+        const visible = filterFoilDuplicates(printings, row.card.id);
+        row.printings = visible;
+        if (!panel.hidden) {
+          panel.innerHTML = stripHtml(row, row.card, visible, printings.length - visible.length);
+        }
+      } catch (err) {
+        panel.innerHTML = panelShell('<span class="loading">Could not load printings.</span>');
+      }
+    }
+
+    resultsEl.addEventListener('click', async (e) => {
+      if (!lookupRows) return;
+      const btn = e.target.closest('button');
+
+      // Flattening every override is deliberate and explicit, so a full
+      // re-render (which closes any open panel) is fine here.
+      if (btn && btn.id === 'apply-frame-to-all') {
+        lookupRows.forEach((row) => { row.frameStyle = null; });
+        renderResults();
+        return;
+      }
+
+      // Picking a printing, or closing the panel, only fires from its own buttons.
+      const panelEl = btn && btn.closest('.printing-panel');
+      if (panelEl) {
+        if (btn.dataset.action === 'close') {
+          closePanels();
+          return;
+        }
+        if (btn.classList.contains('print-option')) {
+          const index = Number(panelEl.dataset.panel);
+          const row = lookupRows[index];
+          const card = row.printings && row.printings[Number(btn.dataset.print)];
+          if (!card) return;
+          assignCard(row, card, true);
+          closePanels();
+          refreshCell(index);
+        }
+        return;
+      }
+
+      const cellEl = e.target.closest('.card-cell');
+      if (!cellEl) return;
+      const index = Number(cellEl.dataset.index);
+      const row = lookupRows[index];
+
+      if (btn && btn.dataset.action === 'retry') {
+        const name = cellEl.querySelector('.retry-input').value.trim();
+        if (!name) return;
+        btn.disabled = true;
+        try {
+          const card = await fuzzyLookup(name);
+          if (card) {
+            row.name = card.name;
+            row.setCode = null;
+            row.collectorNumber = null;
+            assignCard(row, card, false);
+            renderResults();
+          } else {
+            cellEl.querySelector('.card-cell-print').textContent = 'Still no match for "' + name + '".';
+          }
+        } finally {
+          btn.disabled = false;
+        }
+        return;
+      }
+
+      // Any other click on a resolved card's cell opens its printing picker.
+      if (!row.card) return;
+      await openPanel(index, row);
+    });
+
+    // The dropdown lives in .printing-panel, a sibling of .card-cell, and isn't a
+    // button — so it can't retrigger the cell's open/close click handler.
+    resultsEl.addEventListener('change', (e) => {
+      if (!lookupRows || !e.target.classList.contains('frame-select')) return;
+      const panelEl = e.target.closest('.printing-panel');
+      if (!panelEl) return;
+      const index = Number(panelEl.dataset.panel);
+      lookupRows[index].frameStyle = e.target.value || null;
+      refreshFrameBadge(index);
+      refreshOverrideNotice();
+    });
+
+    // Enter inside the retry box would otherwise submit the whole order form.
+    resultsEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.classList.contains('retry-input')) {
+        e.preventDefault();
+        e.target.closest('.card-cell-retry').querySelector('button').click();
+      }
+    });
+
+    lookupBtn.addEventListener('click', runLookup);
+
+    cardlistEl.addEventListener('input', () => {
+      if (!lookupRows || lookupStale) return;
+      lookupStale = true;
+      renderResults();
+    });
+
+    function lookupIsUsable() {
+      return lookupRows && !lookupStale && lookupRows.every((row) => row.card);
+    }
+
+    function canonicalCardlist() {
+      return lookupRows.map((row) => (
+        row.quantity + ' ' + row.card.name + ' (' + row.card.set.toUpperCase() + ') ' + row.card.collector_number
+      )).join('\n');
+    }
 
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
@@ -125,9 +1230,24 @@
 
       const file = form.img_source_file.files[0];
       const link = form.img_source_link.value.trim();
+      const imgSourceFlag = form.img_source_flag.value;
 
       if (file && file.size > MAX_FILE_BYTES) {
         status.textContent = 'That file is too large to upload directly. Please use the link field instead.';
+        status.className = 'error';
+        return;
+      }
+
+      if (usesFrameStyles(imgSourceFlag) && !frameStyleInput.value) {
+        status.textContent = 'Please choose a frame style for your order.';
+        status.className = 'error';
+        return;
+      }
+
+      if (SOURCES_REQUIRING_LOOKUP.includes(imgSourceFlag) && !lookupIsUsable()) {
+        status.textContent = !lookupRows || lookupStale
+          ? 'Please run "Look Up Cards" so we know which printing you want for each card.'
+          : 'Some cards could not be found. Fix them in the card list above before submitting.';
         status.className = 'error';
         return;
       }
@@ -136,13 +1256,22 @@
       status.textContent = 'Submitting...';
       status.className = '';
 
+      const usable = lookupIsUsable();
       const data = {
         name: form.name.value,
-        email: form.email.value,
         orderSize: form.order_size.value,
-        imgSourceFlag: form.img_source_flag.value,
+        imgSourceFlag: imgSourceFlag,
+        // Gated here so a style picked and then abandoned doesn't leak into the row.
+        frameStyle: usesFrameStyles(imgSourceFlag) ? frameStyleInput.value : '',
         imgSourceLink: link || null,
-        cardlist: form.cardlist.value,
+        cardlist: usable ? canonicalCardlist() : form.cardlist.value,
+        cardImages: usable && imgSourceFlag === 'scryfall'
+          ? lookupRows.map((row) => printImage(row.card)).join('\n')
+          : '',
+        // Every line resolved (defaults included) so the column stands alone.
+        cardFrameStyles: usable && usesFrameStyles(imgSourceFlag)
+          ? lookupRows.map(effectiveFrameStyle).join('\n')
+          : '',
         customRequests: form.custom_requests.value,
         imgSourceFile: null,
       };
@@ -158,14 +1287,21 @@
 
         const res = await fetch(ENDPOINT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight to Apps Script
           body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error('Request failed');
         status.textContent = 'Thanks! Your order was submitted.';
         status.className = 'success';
         form.reset();
-        updateImgSourceVisibility();
+        // reset() clears the hidden input but not the thumbnail's selected state.
+        frameThumbsEl.querySelectorAll('.frame-thumb.selected')
+          .forEach((el) => el.classList.remove('selected'));
+        restoreFramePreview();
+        updateSourceVisibility();
+        lookupRows = null;
+        lookupStale = false;
+        renderResults();
       } catch (err) {
         status.textContent = 'Something went wrong. Please try again.';
         status.className = 'error';
