@@ -5,79 +5,718 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Order Submission</title>
 <style>
+  /* ---- Tokens ---------------------------------------------------------
+     Dark is the default theme: these are the base tokens, and [data-theme="light"]
+     below overrides them. Defining dark here (rather than in a media query) means
+     the page paints dark before any JS runs, so there is no light flash on load.
+     color-scheme makes native widgets — select dropdowns, scrollbars, the file
+     picker button — follow the theme too.
+
+     The scale tokens (space/radius/text/transition) are theme-independent and are
+     declared once here; only colour and shadow are redefined per theme. */
+  :root {
+    color-scheme: dark;
+
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+
+    --radius-sm: 4px;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --radius-pill: 999px;
+
+    --text-xs: 0.75rem;
+    --text-sm: 0.8125rem;
+    --text-md: 0.9rem;
+
+    --transition: 140ms ease;
+
+    --bg: #14161a;
+    --surface: #1c1f26;
+    --surface-2: #22262f;
+    --fg: #e8eaed;
+    --fg-muted: #a8adb8;
+    --fg-faint: #7d838f;
+    --border: #333842;
+    --border-strong: #4d545f;
+    --img-placeholder: #2a2e37;
+
+    --btn-bg: #e8eaed;
+    --btn-fg: #14161a;
+
+    --accent: #7aa2e8;
+    --accent-bg: #23304a;
+    --accent-btn: #3d5f9e;
+    --accent-btn-hover: #4a70b8;
+    --accent-ring: rgba(122, 162, 232, 0.3);
+
+    --success: #5ec97f;
+    --success-bg: #16301f;
+    --success-border: #235c37;
+
+    --warn: #e0b862;
+    --warn-bg: #33280f;
+    --warn-border: #4d3d17;
+    --cell-review-bg: #24200f;
+
+    --danger: #f0847a;
+    --danger-bg: #3a1d1a;
+    --danger-border: #63302b;
+    --cell-unresolved-bg: #2a1a18;
+
+    --purple: #c4a2e8;
+    --purple-bg: #2b2038;
+    --purple-border: #3d2f52;
+
+    --info: #a9c5ee;
+    --info-bg: #1b2534;
+    --info-border: #2c3c52;
+    --info-code-bg: #263449;
+
+    /* Dark separates surfaces with borders, so shadow stays almost absent. */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.5);
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+
+    /* --bg is deliberately off-white while --surface stays pure white: cards,
+       inputs and panels have to sit *above* the page, not dissolve into it. */
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #eceff3;
+    --fg: #1a1a1a;
+    --fg-muted: #555c66;
+    --fg-faint: #767c86;
+    --border: #d7dbe1;
+    --border-strong: #a3abb6;
+    --img-placeholder: #e4e7eb;
+
+    --btn-bg: #1a1a1a;
+    --btn-fg: #ffffff;
+
+    --accent: #3a5a9a;
+    --accent-bg: #e5ebf7;
+    --accent-btn: #3a5a9a;
+    --accent-btn-hover: #2e4a83;
+    --accent-ring: rgba(58, 90, 154, 0.22);
+
+    --success: #1a7f37;
+    --success-bg: #e3f4e8;
+    --success-border: #b7e0c4;
+
+    --warn: #8a6100;
+    --warn-bg: #fdf1d0;
+    --warn-border: #f0dca8;
+    --cell-review-bg: #fff7e3;
+
+    --danger: #c0392b;
+    --danger-bg: #fbe3e0;
+    --danger-border: #f0c4bf;
+    --cell-unresolved-bg: #fdeceb;
+
+    --purple: #6b3fa0;
+    --purple-bg: #efe6f7;
+    --purple-border: #e0d2ee;
+
+    --info: #2c4a7c;
+    --info-bg: #eef3fb;
+    --info-border: #cddcf0;
+    --info-code-bg: #dfe8f6;
+
+    /* Light has no border contrast to spare, so elevation does the separating. */
+    --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+    --shadow-2: 0 4px 12px rgba(16, 24, 40, 0.1), 0 2px 4px rgba(16, 24, 40, 0.06);
+  }
+
+  /* ---- Page frame ------------------------------------------------------ */
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  /* Full-bleed with a small side gutter. The page is meant to fit the window,
+     so nothing is centred into a fixed column with dead space either side. */
   body {
     font-family: system-ui, -apple-system, sans-serif;
-    max-width: 560px;
-    margin: 3rem auto;
-    padding: 0 1.5rem;
-    color: #1a1a1a;
+    margin: 0;
+    padding: var(--space-4) var(--space-4) var(--space-6);
+    line-height: 1.5;
+    color: var(--fg);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
-  label { display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem; }
-  .hint { font-weight: 400; color: #666; font-size: 0.8rem; margin: -0.2rem 0 0.4rem; }
+  #page-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
+
+  label { display: block; margin-bottom: var(--space-1); font-weight: 600; font-size: var(--text-md); }
+  .hint { font-weight: 400; color: var(--fg-muted); font-size: var(--text-sm); margin: 0 0 var(--space-2); }
+
+  /* Shared with #filename-note code, which used to be the only styled <code>. */
+  code {
+    font-size: 0.92em;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 0.08em 0.32em;
+  }
+
+  /* ---- Form controls ---------------------------------------------------
+     display:block is what keeps a following <button> off the same line. These
+     controls cap at 560px, so as inline-block they left a gap wide enough for
+     "Look Up Cards" and "Submit Order" to float in beside them. */
   input, textarea, select {
+    display: block;
     width: 100%;
-    padding: 0.6rem;
-    margin-bottom: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+    padding: 0.45rem 0.6rem;
+    margin-bottom: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     font-size: 1rem;
-    box-sizing: border-box;
     font-family: inherit;
-    background: white;
+    background: var(--surface);
+    color: var(--fg);
+    transition: border-color var(--transition), box-shadow var(--transition);
   }
-  textarea { min-height: 100px; resize: vertical; }
-  textarea#cardlist { min-height: 140px; }
+  input::placeholder, textarea::placeholder { color: var(--fg-faint); }
+  input:hover, textarea:hover, select:hover { border-color: var(--border-strong); }
+  input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+  input[type="file"] { padding: 0.5rem; color: var(--fg-muted); font-size: var(--text-md); }
+  textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
+  /* Monospace so set codes and collector numbers line up the way the hint shows them. */
+  textarea#cardlist {
+    min-height: 132px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+  }
+  /* The short fields sit on one row so they use the window width, rather than
+     stacking down a narrow column with the rest of the page empty beside them.
+     auto-fit collapses the row to fewer columns as the window narrows. */
+  .field-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0 var(--space-4);
+    align-items: start;
+  }
+  #order_size { margin-bottom: var(--space-1); }
+  #sheet-math { color: var(--fg-muted); font-size: var(--text-md); margin-bottom: var(--space-3); }
+
+  fieldset {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+    margin: 0 0 var(--space-3);
+    background: var(--surface);
+  }
+  legend { font-weight: 600; font-size: var(--text-sm); padding: 0 var(--space-1); }
+
+  /* ---- Buttons ---------------------------------------------------------
+     Three weights: solid accent for the one action that submits the order,
+     tonal for the lookup step in front of it, and bordered-ghost for the small
+     in-grid actions. Previously the submit button was a heavy white block while
+     the *secondary* lookup action was the only blue thing on the page. */
   button {
-    background: #1a1a1a;
-    color: white;
-    border: none;
-    padding: 0.7rem 1.4rem;
-    border-radius: 6px;
+    font: inherit;
+    font-size: var(--text-md);
+    font-weight: 600;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    padding: 0.55rem 1rem;
+    background: var(--surface-2);
+    color: var(--fg);
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition),
+                color var(--transition), box-shadow var(--transition), filter var(--transition);
+  }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
+  button:disabled { opacity: 0.6; cursor: default; pointer-events: none; }
+
+  button[type="submit"] {
+    background: var(--accent-btn);
+    border-color: var(--accent-btn);
+    color: #fff;
     font-size: 1rem;
+    padding: 0.7rem 1.5rem;
+    box-shadow: var(--shadow-1);
+  }
+  button[type="submit"]:hover {
+    background: var(--accent-btn-hover);
+    border-color: var(--accent-btn-hover);
+  }
+
+  #lookup-btn {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+    color: var(--accent);
+    margin-bottom: var(--space-2);
+  }
+  #lookup-btn:hover { filter: brightness(1.12); }
+
+  .btn-ghost, #theme-toggle {
+    background: none;
+    border-color: var(--border);
+    color: var(--fg-muted);
+    font-weight: 500;
+  }
+  .btn-ghost:hover, #theme-toggle:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--fg);
+  }
+  #theme-toggle {
+    border-radius: var(--radius-pill);
+    padding: 0.35rem 0.8rem;
+    font-size: var(--text-sm);
+    flex-shrink: 0;
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    padding: 0.15rem 0.35rem;
+    margin: -0.15rem -0.35rem;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    text-decoration: underline;
     cursor: pointer;
   }
-  button:disabled { opacity: 0.6; cursor: default; }
-  #status { margin-top: 1rem; font-size: 0.9rem; }
-  #status.success { color: #1a7f37; }
-  #status.error { color: #c0392b; }
-  fieldset { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
-  legend { font-weight: 600; font-size: 0.85rem; padding: 0 0.3rem; }
-  fieldset[hidden] { display: none; }
+  .link-btn:hover { background: var(--accent-bg); text-decoration: none; }
+
+  /* ---- Submit status ---------------------------------------------------
+     Padded only once it carries a result class, so the transient "Submitting..."
+     (which JS sets with an empty className) stays plain text. */
+  #status { margin-top: var(--space-3); font-size: var(--text-md); }
+  #status.success, #status.error {
+    padding: 0.6rem 0.8rem;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+  }
+  #status.success { color: var(--success); background: var(--success-bg); border-color: var(--success-border); }
+  #status.error { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-border); }
+
+  /* ---- Frame style picker ----------------------------------------------
+     These renders carry a black bleed border, so their true ratio is 640/871
+     (0.735), not a bare card's 63/88 (0.716). Using the card ratio would crop them. */
+  #frame-style-picker {
+    display: grid;
+    grid-template-columns: 1fr 480px;
+    gap: var(--space-4);
+    align-items: start;
+    margin-bottom: var(--space-3);
+  }
+  #frame-style-thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-2);
+    max-height: 700px;
+    overflow-y: auto;
+    padding: 2px var(--space-1) 2px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .frame-thumb {
+    background: none;
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    padding: 3px;
+    cursor: pointer;
+    width: 100%;
+    color: inherit;
+    font: inherit;
+  }
+  .frame-thumb:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .frame-thumb.selected { border-color: var(--accent); background: var(--accent-bg); }
+  .frame-thumb img {
+    width: 100%;
+    aspect-ratio: 640 / 871;
+    object-fit: cover;
+    border-radius: 3%;
+    display: block;
+    background: var(--img-placeholder);
+  }
+  /* Two lines reserved: a label that wraps ("Borderless Vector") would otherwise
+     push its own grid row taller than its neighbours and stagger the whole grid. */
+  .frame-thumb-label {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--fg-muted);
+    margin-top: var(--space-1);
+    line-height: 1.2;
+    min-height: 2.4em;
+    word-break: break-word;
+  }
+
+  #frame-style-preview { margin: 0; position: sticky; top: var(--space-4); }
+  #frame-preview-img {
+    width: 100%;
+    aspect-ratio: 640 / 871;
+    object-fit: cover;
+    border-radius: 3%;
+    display: block;
+    background: var(--img-placeholder);
+    border: 1px solid var(--border);
+  }
+  /* Before anything is hovered there is no src. The box still takes its ~350px of
+     layout, so hiding it left an invisible hole with the caption stranded below;
+     styling the empty state makes that reserved space read as a placeholder. */
+  #frame-preview-img:not([src]) {
+    background: var(--surface-2);
+    border: 1px dashed var(--border-strong);
+  }
+  #frame-preview-label {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+    text-align: center;
+    margin-top: var(--space-2);
+  }
+
+  #filename-note {
+    font-size: var(--text-md);
+    line-height: 1.5;
+    color: var(--info);
+    background: var(--info-bg);
+    border: 1px solid var(--info-border);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+  #filename-note code { background: var(--info-code-bg); color: inherit; }
+
+  /* ---- Lookup results --------------------------------------------------- */
+
+  #lookup-status { font-size: var(--text-md); color: var(--fg-muted); margin: var(--space-2) 0; }
+  #lookup-status.error { color: var(--danger); }
+
+  #lookup-results { margin-bottom: var(--space-4); }
+  #lookup-results.stale { opacity: 0.45; }
+  #lookup-summary { font-size: var(--text-md); color: var(--fg-muted); margin-bottom: var(--space-3); }
+
+  #stale-notice, #frame-override-notice {
+    font-size: var(--text-md);
+    border-radius: var(--radius);
+    padding: 0.55rem 0.75rem;
+    margin-bottom: var(--space-3);
+  }
+  #stale-notice { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); }
+  #frame-override-notice { color: var(--purple); background: var(--purple-bg); border: 1px solid var(--purple-border); }
+  #frame-override-notice .link-btn { color: var(--purple); }
+  #frame-override-notice .link-btn:hover { background: var(--purple-border); }
+
+  #card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-3);
+  }
+
+  .card-cell {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space-2);
+    background: var(--surface);
+    box-shadow: var(--shadow-1);
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+  .card-cell[data-status="matched"] { border-top-color: var(--success); }
+  .card-cell[data-status="review"] { border-top-color: var(--warn); background: var(--cell-review-bg); }
+  .card-cell[data-status="picked"] { border-top-color: var(--accent); }
+  .card-cell[data-status="unresolved"] { border-top-color: var(--danger); background: var(--cell-unresolved-bg); }
+
+  /* Resolved cells are clickable anywhere to open the printing picker. Hover
+     brightens only the three neutral edges — a plain border-color would also
+     overwrite the status colour carried by the top edge. */
+  .card-cell:not([data-status="unresolved"]) { cursor: pointer; }
+  .card-cell:not([data-status="unresolved"]):hover {
+    border-right-color: var(--border-strong);
+    border-bottom-color: var(--border-strong);
+    border-left-color: var(--border-strong);
+    box-shadow: var(--shadow-2);
+  }
+  .card-cell:not([data-status="unresolved"]):hover .hint-inline { color: var(--accent); text-decoration: underline; }
+
+  /* Real cards are 63x88mm; matching that keeps the art undistorted. */
+  .card-art {
+    width: 100%;
+    aspect-ratio: 63 / 88;
+    object-fit: cover;
+    border-radius: 4.75% / 3.5%;
+    display: block;
+    background: var(--img-placeholder);
+  }
+  .card-art-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--fg-faint);
+    font-size: 2rem;
+    border: 1px dashed var(--border-strong);
+  }
+  .card-cell-name { font-weight: 600; font-size: var(--text-md); margin-top: var(--space-2); line-height: 1.3; }
+  .card-cell-name .qty { color: var(--fg-muted); font-weight: 400; }
+  .card-cell-print { font-size: var(--text-sm); color: var(--fg-muted); margin-top: var(--space-1); line-height: 1.35; }
+  .card-cell-note { font-size: var(--text-xs); color: var(--warn); margin-top: var(--space-1); line-height: 1.35; }
+  /* margin-top:auto pins this row to the bottom of the cell. Grid already gives
+     every cell in a row the same height, so without it the badges ended wherever
+     each card's text happened to stop. */
+  .card-cell-actions {
+    margin-top: auto;
+    padding-top: var(--space-2);
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  /* Full width so it always drops to its own line under the badges. */
+  .hint-inline { font-size: var(--text-xs); color: var(--fg-muted); width: 100%; }
+
+  .badge {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  .badge-matched { background: var(--success-bg); color: var(--success); border-color: var(--success-border); }
+  .badge-review { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-border); }
+  .badge-unresolved { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+  .badge-picked { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+  .badge-frame { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+
+  .card-cell-retry { margin-top: var(--space-2); display: flex; gap: var(--space-1); }
+  .card-cell-retry input {
+    margin-bottom: 0;
+    padding: 0.35rem 0.5rem;
+    font-size: var(--text-sm);
+    max-width: none;
+    min-width: 0;
+  }
+  .card-cell-retry button { padding: 0.35rem 0.7rem; font-size: var(--text-sm); flex-shrink: 0; }
+
+  /* ---- Printing panel ---------------------------------------------------
+     Spans every column so the picker gets the full width, not one cell's worth. */
+  .printing-panel { grid-column: 1 / -1; }
+  .printing-panel-inner {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+    background: var(--surface-2);
+    box-shadow: var(--shadow-1);
+  }
+  .printing-panel-title {
+    font-size: var(--text-md);
+    font-weight: 600;
+    margin-bottom: var(--space-3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-4);
+  }
+  /* Same two-column shape as the frame style picker: a scrolling grid of
+     options on the left, a large preview of whatever is hovered on the right. */
+  .printing-picker {
+    display: grid;
+    grid-template-columns: 1fr 480px;
+    gap: var(--space-4);
+    align-items: start;
+  }
+  /* A wrapping grid rather than a scrolling row — cards with dozens of arts
+     (Lightning Bolt has 40+) stay scannable instead of hiding most behind a scrollbar.
+     The 700px cap keeps the strip level with the preview beside it. */
+  .printing-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-3);
+    max-height: 700px;
+    overflow-y: auto;
+    padding: 2px var(--space-1) 2px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .printing-preview { margin: 0; position: sticky; top: var(--space-4); }
+  .printing-preview-img {
+    width: 100%;
+    aspect-ratio: 63 / 88;
+    object-fit: cover;
+    border-radius: 4.75% / 3.5%;
+    display: block;
+    background: var(--img-placeholder);
+    border: 1px solid var(--border);
+  }
+  .printing-preview-label {
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+    text-align: center;
+    margin-top: var(--space-2);
+  }
+  .printing-panel .loading { font-size: var(--text-md); color: var(--fg-muted); }
+  .panel-section { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+  .panel-section-title { font-size: var(--text-md); font-weight: 600; margin-bottom: var(--space-2); }
+  .frame-select { max-width: 320px; margin-bottom: 0; }
+
+  .print-option {
+    background: none;
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    padding: 3px;
+    cursor: pointer;
+    width: 100%;
+    color: inherit;
+    font: inherit;
+  }
+  .print-option:hover { border-color: var(--border-strong); background: var(--surface); }
+  .print-option.selected { border-color: var(--accent); background: var(--accent-bg); }
+  .print-option img {
+    width: 100%;
+    aspect-ratio: 63 / 88;
+    object-fit: cover;
+    border-radius: 4.75% / 3.5%;
+    display: block;
+    background: var(--img-placeholder);
+  }
+  /* Same two-line reservation as the frame thumbs — "SLD · IFIYW-10 · 2026" wraps. */
+  .print-option-label {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--fg-muted);
+    margin-top: var(--space-1);
+    line-height: 1.25;
+    min-height: 2.5em;
+    word-break: break-word;
+  }
+
+  /* Chrome only honours scrollbar-width from 121; this keeps older builds thin too. */
+  #frame-style-thumbs::-webkit-scrollbar,
+  .printing-strip::-webkit-scrollbar { width: 10px; }
+  #frame-style-thumbs::-webkit-scrollbar-track,
+  .printing-strip::-webkit-scrollbar-track { background: transparent; }
+  #frame-style-thumbs::-webkit-scrollbar-thumb,
+  .printing-strip::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: var(--radius-pill);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  /* ---- Responsive ------------------------------------------------------- */
+
+  @media (max-width: 900px) {
+    body { padding: var(--space-3) var(--space-3) var(--space-5); }
+    h1 { font-size: 1.2rem; }
+  }
+  /* Stacks well below the desktop layout: at 480px the preview column would
+     otherwise squeeze the thumbnails down to a single cramped row. */
+  @media (max-width: 1000px) {
+    #frame-style-picker, .printing-picker { grid-template-columns: 1fr; }
+    .printing-preview { max-width: 420px; position: static; }
+    #frame-style-preview { max-width: 420px; position: static; }
+  }
+  @media (max-width: 600px) {
+    #card-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
+    .printing-strip { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    #frame-style-thumbs { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    button[type="submit"] { width: 100%; }
+  }
 </style>
 </head>
 <body>
-  <h1>Order Submission</h1>
+  <div id="page-head">
+    <h1>Order Submission</h1>
+    <button type="button" id="theme-toggle">☀ Light</button>
+  </div>
   <form id="order-form">
-    <label for="name">Name</label>
-    <input type="text" id="name" name="name" required>
+    <div class="field-row">
+      <div class="field">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required>
+      </div>
 
-    <label for="email">Email</label>
-    <input type="email" id="email" name="email" required>
+      <div class="field">
+        <label for="order_size_mode">Order Size</label>
+        <select id="order_size_mode" name="order_size_mode" required>
+          <option value="" disabled selected>Select one</option>
+          <option value="commander">Full Commander Deck</option>
+          <option value="sheets">Order by sheet</option>
+        </select>
+      </div>
 
-    <label for="order_size">Order Size (number of cards)</label>
-    <input type="number" id="order_size" name="order_size" min="1" step="1" required>
+      <div id="sheet-count-section" class="field" hidden>
+        <label for="order_size">Number of sheets</label>
+        <input type="number" id="order_size" name="order_size" min="1" step="1">
+        <div id="sheet-math" hidden></div>
+      </div>
 
-    <label for="img_source_flag">Image Source</label>
-    <select id="img_source_flag" name="img_source_flag" required>
-      <option value="" disabled selected>Select one</option>
-      <option value="scryfall">Scryfall</option>
-      <option value="custom-frames">Custom Frames</option>
-      <option value="custom-art">Custom Art</option>
-      <option value="client">I'm providing my own images</option>
-    </select>
+      <div class="field">
+        <label for="img_source_flag">Image Source</label>
+        <select id="img_source_flag" name="img_source_flag" required>
+          <option value="" disabled selected>Select one</option>
+          <option value="scryfall">Scryfall</option>
+          <option value="custom-frames">Custom Frames</option>
+          <option value="custom-art">Full Custom</option>
+          <option value="client">I'm providing my own images</option>
+        </select>
+      </div>
+    </div>
 
-    <fieldset id="img_source_fieldset" hidden>
-      <legend>Image Files</legend>
+    <div id="frame-style-section" hidden>
+      <label>Frame Style</label>
+      <div class="hint">Applies to every card in this order. Hover to preview, click to choose.</div>
+      <div id="frame-style-picker">
+        <div id="frame-style-thumbs"></div>
+        <figure id="frame-style-preview">
+          <img id="frame-preview-img" alt="">
+          <figcaption id="frame-preview-label">Hover a style to preview it</figcaption>
+        </figure>
+      </div>
+      <input type="hidden" id="frame_style" name="frame_style">
+    </div>
+
+    <fieldset id="image-files-section" hidden>
+      <legend>Image Files (only needed if you're providing your own)</legend>
+      <div id="filename-note" hidden>
+        <strong>Name each image file after its card</strong> — <code>Lightning Bolt.png</code>,
+        <code>Sol Ring.jpg</code>. That's how we match your art to the card list below.
+        If a card needs more than one different art, number them:
+        <code>Lightning Bolt 2.png</code>.
+      </div>
       <label for="img_source_file">Upload a zip/compressed folder (under ~25MB)</label>
       <input type="file" id="img_source_file" name="img_source_file" accept=".zip,.rar,.7z">
-      <label for="img_source_link">Or paste a link (Drive/Dropbox/WeTransfer) for larger files</label>
+      <label for="img_source_link">Or paste a link (Drive/Dropbox/WeTransfer/Wormhole) for larger files</label>
       <input type="url" id="img_source_link" name="img_source_link" placeholder="https://...">
     </fieldset>
 
-    <label for="cardlist">Card List</label>
-    <div class="hint">One card per line.</div>
-    <textarea id="cardlist" name="cardlist" required></textarea>
+    <div id="cardlist-section">
+      <label for="cardlist">Card List</label>
+      <div class="hint">
+        One card per line. Add a set code to pick a printing automatically —
+        <code>4 Lightning Bolt (2XM) 129</code> or <code>2 Counterspell [MH2]</code>.
+      </div>
+      <textarea id="cardlist" name="cardlist" required></textarea>
+      <button type="button" id="lookup-btn">Look Up Cards</button>
+      <div id="lookup-status"></div>
+      <div id="lookup-results"></div>
+    </div>
 
     <label for="custom_requests">Custom Requests / Notes</label>
     <div class="hint">Optional. Anything else we should know about this order.</div>
@@ -88,28 +727,842 @@
   </form>
 
   <script>
+    // Paste your Google Apps Script Web App URL here after deploying it (see README.md).
     const ENDPOINT_URL = '/api/orders';
     const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB safety limit for direct upload
+    const SCRYFALL = 'https://api.scryfall.com';
+    const COLLECTION_BATCH = 75; // Scryfall's hard cap per /cards/collection request
+    const SOURCES_REQUIRING_LOOKUP = ['scryfall', 'custom-frames'];
+    // Full Custom supplies its own art but still gets printed in one of our
+    // frame treatments, so it uses the same frame selection as Custom Frames.
+    const SOURCES_WITH_FRAMES = ['custom-frames', 'custom-art'];
+
+    function usesFrameStyles(value) {
+      return SOURCES_WITH_FRAMES.includes(value);
+    }
+
+    // Hardcoded because there is no build step and file:// cannot list a directory.
+    // The slug is both the submitted value and the image filename (img/<slug>.jpg).
+    const FRAME_STYLES = [
+      ['normal', 'Normal'], ['classic', 'Classic'], ['classic-token', 'Classic Token'],
+      ['extended', 'Extended Art'], ['borderless-vector', 'Borderless Vector'],
+      ['colorshifted', 'Colorshifted'], ['crimson-fang', 'Crimson Fang'],
+      ['double-feature', 'Double Feature'], ['etched', 'Etched'], ['expedition', 'Expedition'],
+      ['kaldheim', 'Kaldheim'], ['masterpiece', 'Masterpiece'], ['neon', 'Neon'],
+      ['ninja', 'Ninja'], ['phyrexian', 'Phyrexian'], ['ring', 'Ring'], ['sketch', 'Sketch'],
+      ['snow', 'Snow'], ['stained-glass', 'Stained Glass'], ['stargazing', 'Stargazing'],
+    ];
+
+    // Dark is the default; :root already paints it, so this only has to handle
+    // a stored preference and the toggle. localStorage throws in some privacy
+    // modes, so every access is guarded — the page must still work without it.
+    const THEME_KEY = 'mtgprint-theme';
+    const themeToggle = document.getElementById('theme-toggle');
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      themeToggle.textContent = theme === 'dark' ? '☀ Light' : '☾ Dark';
+      themeToggle.setAttribute(
+        'aria-label',
+        theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+      );
+    }
+
+    let storedTheme = null;
+    try { storedTheme = localStorage.getItem(THEME_KEY); } catch (err) { /* unavailable */ }
+    applyTheme(storedTheme === 'light' ? 'light' : 'dark');
+
+    themeToggle.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (err) { /* unavailable */ }
+    });
 
     const form = document.getElementById('order-form');
     const status = document.getElementById('status');
-    const button = form.querySelector('button');
-    const imgSourceFlagSelect = document.getElementById('img_source_flag');
-    const imgSourceFieldset = document.getElementById('img_source_fieldset');
+    const button = form.querySelector('button[type="submit"]');
+    const cardlistEl = document.getElementById('cardlist');
+    const lookupBtn = document.getElementById('lookup-btn');
+    const lookupStatus = document.getElementById('lookup-status');
+    const resultsEl = document.getElementById('lookup-results');
+    const imgSourceFlagEl = document.getElementById('img_source_flag');
+    const orderSizeModeEl = document.getElementById('order_size_mode');
+    const orderSizeEl = document.getElementById('order_size');
+    const sheetCountSection = document.getElementById('sheet-count-section');
+    const sheetMathEl = document.getElementById('sheet-math');
+    const imageFilesSection = document.getElementById('image-files-section');
+    const filenameNote = document.getElementById('filename-note');
+    const cardlistSection = document.getElementById('cardlist-section');
+    const frameStyleSection = document.getElementById('frame-style-section');
+    const frameThumbsEl = document.getElementById('frame-style-thumbs');
+    const framePreviewImg = document.getElementById('frame-preview-img');
+    const framePreviewLabel = document.getElementById('frame-preview-label');
+    const frameStyleInput = document.getElementById('frame_style');
 
-    // Dynamic form: the image-upload/link fieldset only matters when the
-    // client is providing their own images. Hide it otherwise, and clear
-    // any values left in it so they don't get submitted by mistake.
-    function updateImgSourceVisibility() {
-      const isClientProvided = imgSourceFlagSelect.value === 'client';
-      imgSourceFieldset.hidden = !isClientProvided;
-      if (!isClientProvided) {
-        form.img_source_file.value = '';
-        form.img_source_link.value = '';
+    let lookupRows = null;
+    let lookupStale = false;
+    let framesBuilt = false;
+    const printingsCache = new Map();
+
+    function frameImagePath(slug) {
+      return 'img/' + slug + '.jpg';
+    }
+
+    // img/ is ~11.7MB, so the thumbnails are only built the first time Custom
+    // Frames is chosen — most visitors never load a single one.
+    function ensureFrameThumbs() {
+      if (framesBuilt) return;
+      framesBuilt = true;
+      frameThumbsEl.innerHTML = FRAME_STYLES.map(([slug, label]) => (
+        '<button type="button" class="frame-thumb" data-style="' + escapeHtml(slug) + '">' +
+          '<img src="' + escapeHtml(frameImagePath(slug)) + '" alt="" loading="lazy">' +
+          '<span class="frame-thumb-label">' + escapeHtml(label) + '</span>' +
+        '</button>'
+      )).join('');
+    }
+
+    function frameStyleLabel(slug) {
+      const entry = FRAME_STYLES.find(([value]) => value === slug);
+      return entry ? entry[1] : slug;
+    }
+
+    // The order-level style is a default; a row only overrides it when set.
+    function effectiveFrameStyle(row) {
+      return row.frameStyle || frameStyleInput.value;
+    }
+
+    function isFrameOverridden(row) {
+      return Boolean(row.frameStyle) && row.frameStyle !== frameStyleInput.value;
+    }
+
+    function showFramePreview(slug, label) {
+      framePreviewImg.src = frameImagePath(slug);
+      framePreviewLabel.textContent = label;
+    }
+
+    // Reverts a transient hover preview back to whatever is actually selected.
+    function restoreFramePreview() {
+      const selected = FRAME_STYLES.find(([slug]) => slug === frameStyleInput.value);
+      if (selected) {
+        showFramePreview(selected[0], selected[1]);
+      } else {
+        framePreviewImg.removeAttribute('src');
+        framePreviewLabel.textContent = 'Hover a style to preview it';
       }
     }
-    imgSourceFlagSelect.addEventListener('change', updateImgSourceVisibility);
-    updateImgSourceVisibility();
+
+    function frameStyleFor(el) {
+      const btn = el && el.closest ? el.closest('.frame-thumb') : null;
+      if (!btn) return null;
+      const slug = btn.dataset.style;
+      const entry = FRAME_STYLES.find(([value]) => value === slug);
+      return entry ? { btn, slug: entry[0], label: entry[1] } : null;
+    }
+
+    // mouseover and focusin both preview, so the picker works by pointer or keyboard.
+    frameThumbsEl.addEventListener('mouseover', (e) => {
+      const hit = frameStyleFor(e.target);
+      if (hit) showFramePreview(hit.slug, hit.label);
+    });
+    frameThumbsEl.addEventListener('focusin', (e) => {
+      const hit = frameStyleFor(e.target);
+      if (hit) showFramePreview(hit.slug, hit.label);
+    });
+    frameThumbsEl.addEventListener('mouseleave', restoreFramePreview);
+
+    frameThumbsEl.addEventListener('click', (e) => {
+      const hit = frameStyleFor(e.target);
+      if (!hit) return;
+      frameStyleInput.value = hit.slug;
+      frameThumbsEl.querySelectorAll('.frame-thumb.selected')
+        .forEach((el) => el.classList.remove('selected'));
+      hit.btn.classList.add('selected');
+      showFramePreview(hit.slug, hit.label);
+      // Overrides survive a default change, so re-render to re-evaluate which
+      // cards still count as deviating from the new default.
+      if (lookupRows) renderResults();
+    });
+
+    // "I'm providing my own images" replaces the card list with an upload/link.
+    // "Full Custom" needs both: a card list to know what to print, plus the art for it.
+    function updateSourceVisibility() {
+      const value = imgSourceFlagEl.value;
+      const isClient = value === 'client';
+      const hasFrames = usesFrameStyles(value);
+      imageFilesSection.hidden = !(isClient || value === 'custom-art');
+      // Only meaningful for Full Custom: it's the one source that pairs uploaded
+      // art with a card list, so filenames are what tie the two together.
+      // "I'm providing my own images" hides the card list, leaving nothing to match.
+      filenameNote.hidden = value !== 'custom-art';
+      cardlistSection.hidden = isClient;
+      cardlistEl.required = !isClient;
+      frameStyleSection.hidden = !hasFrames;
+      if (hasFrames) ensureFrameThumbs();
+    }
+    imgSourceFlagEl.addEventListener('change', updateSourceVisibility);
+    updateSourceVisibility();
+
+    // A print sheet holds 8 cards, and a Commander deck is the 100-card format,
+    // so both choices resolve to a plain card count for the sheet.
+    const CARDS_PER_SHEET = 8;
+    const COMMANDER_DECK_CARDS = 100;
+
+    function sheetCount() {
+      const value = parseInt(orderSizeEl.value, 10);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    function updateSheetMath() {
+      const sheets = sheetCount();
+      sheetMathEl.hidden = sheets === null;
+      if (sheets === null) return;
+      sheetMathEl.textContent = sheets + (sheets === 1 ? ' sheet = ' : ' sheets = ')
+        + (sheets * CARDS_PER_SHEET) + ' cards';
+    }
+
+    function updateOrderSizeVisibility() {
+      const bySheet = orderSizeModeEl.value === 'sheets';
+      sheetCountSection.hidden = !bySheet;
+      // Only demand a count when it's the visible way of giving one; a hidden
+      // required field would block submit with nothing to point the user at.
+      orderSizeEl.required = bySheet;
+      if (bySheet) updateSheetMath();
+    }
+
+    // The sheet's Order Size column is a card count, so both modes land there
+    // as one: a Commander deck is 100 cards, and N sheets is N * 8.
+    function resolvedOrderSize() {
+      if (orderSizeModeEl.value === 'commander') return String(COMMANDER_DECK_CARDS);
+      const sheets = sheetCount();
+      return sheets === null ? '' : String(sheets * CARDS_PER_SHEET);
+    }
+
+    orderSizeModeEl.addEventListener('change', updateOrderSizeVisibility);
+    orderSizeEl.addEventListener('input', updateSheetMath);
+    updateOrderSizeVisibility();
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    // Scryfall asks for 50-100ms between requests, so every call goes through one queue.
+    let queueTail = Promise.resolve();
+    function enqueue(fn) {
+      const result = queueTail.then(fn);
+      queueTail = result.catch(() => {}).then(() => sleep(100));
+      return result;
+    }
+
+    function scryfallFetch(url, options) {
+      return enqueue(async () => {
+        const res = await fetch(url, Object.assign({}, options, {
+          headers: Object.assign({ Accept: 'application/json' }, options && options.headers),
+        }));
+        return res.json();
+      });
+    }
+
+    const SECTION_HEADERS = new Set([
+      'deck', 'deckbox', 'sideboard', 'sidebar', 'commander',
+      'maybeboard', 'companion', 'tokens', 'main', 'mainboard',
+    ]);
+
+    function parseCardLines(text) {
+      const rows = [];
+      for (const rawLine of text.split('\n')) {
+        const raw = rawLine.trim();
+        if (!raw) continue;
+        // Only a leading `//` is a comment — `Fire // Ice` is a real card name.
+        if (raw.startsWith('//') || raw.startsWith('#')) continue;
+        if (SECTION_HEADERS.has(raw.toLowerCase())) continue;
+
+        let rest = raw.replace(/\s*\*[^*]*\*\s*$/, '').trim(); // drop Moxfield's *F* foil marker
+
+        let quantity = 1;
+        const qtyMatch = rest.match(/^(\d+)\s*[xX]?\s+/);
+        if (qtyMatch) {
+          quantity = parseInt(qtyMatch[1], 10) || 1;
+          rest = rest.slice(qtyMatch[0].length).trim();
+        }
+
+        let setCode = null;
+        let collectorNumber = null;
+        const setMatch = rest.match(/\s*[([]([A-Za-z0-9]{2,6})[)\]]\s*([A-Za-z0-9-]+(?:\s*★)?)?\s*$/);
+        if (setMatch) {
+          setCode = setMatch[1].toLowerCase();
+          collectorNumber = setMatch[2] ? setMatch[2].replace(/\s+/g, '') : null;
+          rest = rest.slice(0, setMatch.index).trim();
+        }
+
+        if (!rest) continue;
+        // frameStyle null means "follow the order-level default" — storing null
+        // rather than copying the default is what lets a later change to the
+        // default flow through to cards the client never touched.
+        rows.push({
+          raw, quantity, name: rest, setCode, collectorNumber,
+          card: null, status: 'unresolved', frameStyle: null,
+        });
+      }
+      return rows;
+    }
+
+    // Double-faced layouts carry art on card_faces instead of a top-level image_uris.
+    function imageFor(card, size) {
+      if (card.image_uris && card.image_uris[size]) return card.image_uris[size];
+      if (card.card_faces) {
+        for (const face of card.card_faces) {
+          if (face.image_uris && face.image_uris[size]) return face.image_uris[size];
+        }
+      }
+      return '';
+    }
+
+    function printImage(card) {
+      return imageFor(card, 'png') || imageFor(card, 'large') || imageFor(card, 'normal');
+    }
+
+    function nameMatches(card, name) {
+      const wanted = name.toLowerCase();
+      const full = card.name.toLowerCase();
+      return full === wanted || full.split(' // ')[0] === wanted;
+    }
+
+    function identifierFor(row) {
+      if (row.setCode && row.collectorNumber) {
+        return { set: row.setCode, collector_number: row.collectorNumber };
+      }
+      if (row.setCode) return { name: row.name, set: row.setCode };
+      return { name: row.name };
+    }
+
+    // /cards/collection does not promise result order, so match cards back to rows by field.
+    function findCard(row, cards) {
+      return cards.find((card) => {
+        if (row.setCode && row.collectorNumber) {
+          return card.set === row.setCode && card.collector_number === row.collectorNumber;
+        }
+        if (row.setCode) return card.set === row.setCode && nameMatches(card, row.name);
+        return nameMatches(card, row.name);
+      }) || null;
+    }
+
+    // "matched" means we actually honoured the requested set — never just that one was asked for.
+    function assignCard(row, card, userPicked) {
+      row.card = card;
+      if (userPicked) row.status = 'picked';
+      else if (row.setCode && card.set === row.setCode) row.status = 'matched';
+      else row.status = 'review';
+    }
+
+    async function fuzzyLookup(name) {
+      const result = await scryfallFetch(SCRYFALL + '/cards/named?fuzzy=' + encodeURIComponent(name));
+      return result && result.object === 'card' ? result : null;
+    }
+
+    async function resolveInto(rows) {
+      for (let i = 0; i < rows.length; i += COLLECTION_BATCH) {
+        const batch = rows.slice(i, i + COLLECTION_BATCH);
+        const result = await scryfallFetch(SCRYFALL + '/cards/collection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifiers: batch.map(identifierFor) }),
+        });
+        const cards = (result && result.data) || [];
+        for (const row of batch) {
+          const card = findCard(row, cards);
+          if (card) assignCard(row, card, false);
+        }
+      }
+    }
+
+    async function runLookup() {
+      const rows = parseCardLines(cardlistEl.value);
+      if (!rows.length) {
+        lookupStatus.textContent = 'Nothing to look up — add some cards first.';
+        lookupStatus.className = 'error';
+        return;
+      }
+
+      lookupBtn.disabled = true;
+      lookupStatus.className = '';
+      lookupStatus.textContent = 'Looking up ' + rows.length + ' card' + (rows.length === 1 ? '' : 's') + '...';
+      resultsEl.innerHTML = '';
+
+      try {
+        await resolveInto(rows);
+
+        // A stale collector number resolves to a real card of the wrong name
+        // (2XM 129 is Grim Lavamancer, not Lightning Bolt), so trust the name
+        // over the number and re-resolve those against the set alone.
+        const mismatched = rows.filter((row) => (
+          row.card && row.collectorNumber && !nameMatches(row.card, row.name)
+        ));
+        for (const row of mismatched) {
+          row.card = null;
+          row.collectorNumber = null;
+        }
+        if (mismatched.length) await resolveInto(mismatched);
+
+        // Anything unmatched gets one fuzzy retry, which rescues most typos.
+        const misses = rows.filter((row) => !row.card);
+        for (const row of misses) {
+          const card = await fuzzyLookup(row.name);
+          if (!card) continue;
+          row.name = card.name;
+          assignCard(row, card, false);
+        }
+
+        // Fuzzy ignores the requested set, so retry those now that the name is
+        // spelled correctly — otherwise a typo silently discards a valid set code.
+        const setRetry = rows.filter((row) => row.card && row.setCode && row.card.set !== row.setCode);
+        if (setRetry.length) await resolveInto(setRetry);
+
+        lookupRows = rows;
+        lookupStale = false;
+        lookupStatus.textContent = '';
+        renderResults();
+      } catch (err) {
+        lookupStatus.textContent = 'Card lookup failed. Check your connection and try again.';
+        lookupStatus.className = 'error';
+      } finally {
+        lookupBtn.disabled = false;
+      }
+    }
+
+    function printingLabel(card) {
+      const year = (card.released_at || '').slice(0, 4);
+      return card.set_name + ' (' + card.set.toUpperCase() + ') · ' + card.collector_number +
+        (year ? ' · ' + year : '');
+    }
+
+    const BADGES = {
+      matched: 'matched',
+      review: 'review',
+      picked: 'your pick',
+      unresolved: 'not found',
+    };
+
+    function setNote(row) {
+      if (!row.setCode || !row.card || row.card.set === row.setCode) return '';
+      if (row.status === 'picked') return '';
+      return '<div class="card-cell-note">No ' + escapeHtml(row.name) + ' in ' +
+        escapeHtml(row.setCode.toUpperCase()) + ' — showing the newest printing instead.</div>';
+    }
+
+    // Badged only when it deviates, so the exceptions stand out instead of the
+    // same label repeating across every cell in the grid.
+    function frameBadgeHtml(row) {
+      if (!isFrameOverridden(row)) return '';
+      return '<span class="badge badge-frame">' + escapeHtml(frameStyleLabel(row.frameStyle)) + '</span>';
+    }
+
+    // Each cell is followed by its own full-width panel, so an expanded picker
+    // pushes the grid open beneath the card it belongs to.
+    function cellHtml(row, index) {
+      const panel = '<div class="printing-panel" data-panel="' + index + '" hidden></div>';
+      const qty = ' <span class="qty">×' + row.quantity + '</span>';
+
+      if (!row.card) {
+        return '<div class="card-cell" data-index="' + index + '" data-status="unresolved">' +
+          '<div class="card-art card-art-empty">?</div>' +
+          '<div class="card-cell-name">' + escapeHtml(row.name) + qty + '</div>' +
+          '<div class="card-cell-print">No card matched this line.</div>' +
+          '<div class="card-cell-actions"><span class="badge badge-unresolved">' + BADGES.unresolved + '</span></div>' +
+          '<div class="card-cell-retry">' +
+            '<input type="text" class="retry-input" value="' + escapeHtml(row.name) + '">' +
+            '<button type="button" class="btn-ghost" data-action="retry">Find</button>' +
+          '</div>' +
+        '</div>' + panel;
+      }
+
+      return '<div class="card-cell" data-index="' + index + '" data-status="' + row.status + '">' +
+        '<img class="card-art" src="' + escapeHtml(imageFor(row.card, 'normal')) + '" alt="" loading="lazy">' +
+        '<div class="card-cell-name">' + escapeHtml(row.card.name) + qty + '</div>' +
+        '<div class="card-cell-print">' + escapeHtml(printingLabel(row.card)) + '</div>' +
+        setNote(row) +
+        '<div class="card-cell-actions">' +
+          '<span class="badge badge-' + row.status + '">' + BADGES[row.status] + '</span>' +
+          frameBadgeHtml(row) +
+          '<span class="hint-inline">click to change printing</span>' +
+        '</div>' +
+      '</div>' + panel;
+    }
+
+    function summaryText() {
+      const total = lookupRows.reduce((sum, row) => sum + row.quantity, 0);
+      const counts = { matched: 0, review: 0, picked: 0, unresolved: 0 };
+      for (const row of lookupRows) counts[row.status]++;
+      const parts = [lookupRows.length + ' lines · ' + total + ' cards'];
+      if (counts.matched) parts.push(counts.matched + ' matched');
+      if (counts.picked) parts.push(counts.picked + ' hand-picked');
+      if (counts.review) parts.push(counts.review + ' to review');
+      if (counts.unresolved) parts.push(counts.unresolved + ' not found');
+      return parts.join(' · ');
+    }
+
+    function renderResults() {
+      if (!lookupRows) {
+        resultsEl.innerHTML = '';
+        return;
+      }
+      resultsEl.className = lookupStale ? 'stale' : '';
+      resultsEl.innerHTML =
+        (lookupStale ? '<div id="stale-notice">Card list changed — run Look Up Cards again.</div>' : '') +
+        '<div id="lookup-summary">' + escapeHtml(summaryText()) + '</div>' +
+        overrideNoticeHtml() +
+        '<div id="card-grid">' + lookupRows.map(cellHtml).join('') + '</div>';
+    }
+
+    function refreshCell(index) {
+      const cellEl = resultsEl.querySelector('.card-cell[data-index="' + index + '"]');
+      if (!cellEl) return;
+      const row = lookupRows[index];
+      cellEl.dataset.status = row.status;
+      cellEl.querySelector('.card-art').src = imageFor(row.card, 'normal');
+      cellEl.querySelector('.card-cell-print').textContent = printingLabel(row.card);
+      const note = cellEl.querySelector('.card-cell-note');
+      if (note) note.remove();
+      const badge = cellEl.querySelector('.badge');
+      badge.className = 'badge badge-' + row.status;
+      badge.textContent = BADGES[row.status];
+      const summary = document.getElementById('lookup-summary');
+      if (summary) summary.textContent = summaryText();
+    }
+
+    // Updates just this cell's frame badge. Deliberately not a renderResults()
+    // call: that rebuilds resultsEl and would slam the open panel shut the
+    // instant the client picked a style from the dropdown inside it.
+    function refreshFrameBadge(index) {
+      const cellEl = resultsEl.querySelector('.card-cell[data-index="' + index + '"]');
+      if (!cellEl) return;
+      const actions = cellEl.querySelector('.card-cell-actions');
+      const existing = actions.querySelector('.badge-frame');
+      if (existing) existing.remove();
+      const html = frameBadgeHtml(lookupRows[index]);
+      if (!html) return;
+      actions.querySelector('.badge').insertAdjacentHTML('afterend', html);
+    }
+
+    function overrideCount() {
+      if (!lookupRows) return 0;
+      return lookupRows.filter(isFrameOverridden).length;
+    }
+
+    function overrideNoticeHtml() {
+      const count = overrideCount();
+      if (!count || !usesFrameStyles(imgSourceFlagEl.value)) return '';
+      const defaultLabel = frameStyleLabel(frameStyleInput.value);
+      return '<div id="frame-override-notice">' +
+        count + (count === 1 ? ' card uses' : ' cards use') + ' their own frame style. ' +
+        '<button type="button" class="link-btn" id="apply-frame-to-all">Apply ' +
+          escapeHtml(defaultLabel) + ' to all</button>' +
+      '</div>';
+    }
+
+    function refreshOverrideNotice() {
+      const existing = document.getElementById('frame-override-notice');
+      const html = overrideNoticeHtml();
+      if (existing && !html) {
+        existing.remove();
+        return;
+      }
+      if (!html) return;
+      if (existing) {
+        existing.outerHTML = html;
+        return;
+      }
+      const summary = document.getElementById('lookup-summary');
+      if (summary) summary.insertAdjacentHTML('afterend', html);
+    }
+
+    async function fetchPrintings(card) {
+      const key = card.oracle_id || card.name;
+      if (printingsCache.has(key)) return printingsCache.get(key);
+
+      const all = [];
+      let url = card.prints_search_uri;
+      while (url) {
+        const page = await scryfallFetch(url);
+        if (!page || !page.data) break;
+        all.push.apply(all, page.data);
+        url = page.has_more ? page.next_page : null;
+      }
+      printingsCache.set(key, all);
+      return all;
+    }
+
+    function isFoilOnly(card) {
+      if (Array.isArray(card.finishes)) return !card.finishes.includes('nonfoil');
+      return card.nonfoil === false;
+    }
+
+    // Double-faced cards carry illustration_id per face rather than at the top level.
+    function illustrationId(card) {
+      if (card.illustration_id) return card.illustration_id;
+      if (card.card_faces) {
+        return card.card_faces.map((face) => face.illustration_id || '').join('+');
+      }
+      return '';
+    }
+
+    // Everything that changes how the printed card actually looks. Art alone is
+    // not enough: the same illustration ships in 1997/2003/2015 frames, full-art,
+    // and inverted/etched treatments that are all visually distinct cards.
+    function visualKey(card) {
+      return [
+        illustrationId(card),
+        card.set,
+        card.frame || '',
+        (card.frame_effects || []).slice().sort().join('+'),
+        card.border_color || '',
+        card.full_art ? 'fullart' : '',
+        card.textless ? 'textless' : '',
+      ].join('|');
+    }
+
+    // Scryfall scans don't render the foil shine, so a foil-only printing that
+    // matches a non-foil one on every visual attribute is a pure duplicate here.
+    // The current selection is always kept so the strip can mark it selected.
+    function filterFoilDuplicates(printings, keepId) {
+      const nonFoilKeys = new Set();
+      for (const print of printings) {
+        if (!isFoilOnly(print)) nonFoilKeys.add(visualKey(print));
+      }
+      return printings.filter((print) => (
+        print.id === keepId || !isFoilOnly(print) || !nonFoilKeys.has(visualKey(print))
+      ));
+    }
+
+    function panelShell(body) {
+      return '<div class="printing-panel-inner">' + body + '</div>';
+    }
+
+    // Only meaningful where we supply the frame; Scryfall and client-supplied
+    // images already carry their own.
+    function frameSectionHtml(row) {
+      if (!usesFrameStyles(imgSourceFlagEl.value)) return '';
+      const defaultLabel = frameStyleInput.value
+        ? frameStyleLabel(frameStyleInput.value)
+        : 'none chosen yet';
+      const options = ['<option value="">Use order default (' + escapeHtml(defaultLabel) + ')</option>']
+        .concat(FRAME_STYLES.map(([slug, label]) => (
+          '<option value="' + escapeHtml(slug) + '"' +
+            (row.frameStyle === slug ? ' selected' : '') + '>' + escapeHtml(label) + '</option>'
+        )))
+        .join('');
+      return '<div class="panel-section">' +
+        '<div class="panel-section-title">Frame Style</div>' +
+        '<select class="frame-select">' + options + '</select>' +
+      '</div>';
+    }
+
+    function stripHtml(row, card, printings, hiddenCount) {
+      const hidden = hiddenCount
+        ? ' · ' + hiddenCount + ' foil duplicate' + (hiddenCount === 1 ? '' : 's') + ' hidden'
+        : '';
+      const title = '<div class="printing-panel-title"><span>' + escapeHtml(card.name) +
+        ' — ' + printings.length + ' printing' + (printings.length === 1 ? '' : 's') + hidden + '</span>' +
+        '<button type="button" class="link-btn" data-action="close">close</button></div>';
+      // 'normal' rather than 'small': the tiles render around 210px wide now, which
+      // Scryfall's 146px small scan cannot fill sharply. They stay lazy, so only the
+      // visible handful of a 100-printing card is ever fetched, and the preview then
+      // reuses the exact image the tile already cached.
+      const options = printings.map((print, i) => {
+        const selected = print.id === card.id ? ' selected' : '';
+        const year = (print.released_at || '').slice(0, 4);
+        return '<button type="button" class="print-option' + selected + '" data-print="' + i + '">' +
+          '<img src="' + escapeHtml(imageFor(print, 'normal')) + '" alt="" loading="lazy">' +
+          '<span class="print-option-label">' +
+            escapeHtml(print.set.toUpperCase() + ' · ' + print.collector_number + (year ? ' · ' + year : '')) +
+          '</span></button>';
+      }).join('');
+      // Seeded with the printing currently in use, so the panel opens showing the
+      // card it is about to replace rather than an empty box.
+      const preview = '<figure class="printing-preview">' +
+        '<img class="printing-preview-img" src="' + escapeHtml(imageFor(card, 'normal')) + '" alt="">' +
+        '<figcaption class="printing-preview-label">' + escapeHtml(printingLabel(card)) + '</figcaption>' +
+      '</figure>';
+      return panelShell(
+        title +
+        '<div class="printing-picker">' +
+          '<div class="printing-strip">' + options + '</div>' +
+          preview +
+        '</div>' +
+        frameSectionHtml(row)
+      );
+    }
+
+    function printOptionFor(el) {
+      const btn = el && el.closest ? el.closest('.print-option') : null;
+      if (!btn) return null;
+      const panelEl = btn.closest('.printing-panel');
+      if (!panelEl || !lookupRows) return null;
+      const row = lookupRows[Number(panelEl.dataset.panel)];
+      const print = row && row.printings && row.printings[Number(btn.dataset.print)];
+      return print ? { panelEl, print } : null;
+    }
+
+    function showPrintingPreview(panelEl, print) {
+      const img = panelEl.querySelector('.printing-preview-img');
+      const label = panelEl.querySelector('.printing-preview-label');
+      if (!img || !label) return;
+      img.src = imageFor(print, 'normal');
+      label.textContent = printingLabel(print);
+    }
+
+    // Reverts a transient hover back to the printing actually in use.
+    function restorePrintingPreview(panelEl) {
+      const row = lookupRows && lookupRows[Number(panelEl.dataset.panel)];
+      if (row && row.card) showPrintingPreview(panelEl, row.card);
+    }
+
+    function closePanels() {
+      resultsEl.querySelectorAll('.printing-panel').forEach((panel) => {
+        panel.hidden = true;
+        panel.innerHTML = '';
+      });
+    }
+
+    async function openPanel(index, row) {
+      const panel = resultsEl.querySelector('.printing-panel[data-panel="' + index + '"]');
+      const wasOpen = !panel.hidden;
+      closePanels();
+      if (wasOpen) return;
+
+      panel.hidden = false;
+      panel.innerHTML = panelShell('<span class="loading">Loading printings...</span>');
+      try {
+        const printings = await fetchPrintings(row.card);
+        // Filter before storing: data-print indexes into row.printings.
+        const visible = filterFoilDuplicates(printings, row.card.id);
+        row.printings = visible;
+        if (!panel.hidden) {
+          panel.innerHTML = stripHtml(row, row.card, visible, printings.length - visible.length);
+          // mouseleave does not bubble, so it cannot be delegated on resultsEl the
+          // way mouseover and focusin are below.
+          const strip = panel.querySelector('.printing-strip');
+          if (strip) strip.addEventListener('mouseleave', () => restorePrintingPreview(panel));
+        }
+      } catch (err) {
+        panel.innerHTML = panelShell('<span class="loading">Could not load printings.</span>');
+      }
+    }
+
+    // Pointer or keyboard both drive the preview, matching the frame style picker.
+    resultsEl.addEventListener('mouseover', (e) => {
+      const hit = printOptionFor(e.target);
+      if (hit) showPrintingPreview(hit.panelEl, hit.print);
+    });
+    resultsEl.addEventListener('focusin', (e) => {
+      const hit = printOptionFor(e.target);
+      if (hit) showPrintingPreview(hit.panelEl, hit.print);
+    });
+
+    resultsEl.addEventListener('click', async (e) => {
+      if (!lookupRows) return;
+      const btn = e.target.closest('button');
+
+      // Flattening every override is deliberate and explicit, so a full
+      // re-render (which closes any open panel) is fine here.
+      if (btn && btn.id === 'apply-frame-to-all') {
+        lookupRows.forEach((row) => { row.frameStyle = null; });
+        renderResults();
+        return;
+      }
+
+      // Picking a printing, or closing the panel, only fires from its own buttons.
+      const panelEl = btn && btn.closest('.printing-panel');
+      if (panelEl) {
+        if (btn.dataset.action === 'close') {
+          closePanels();
+          return;
+        }
+        if (btn.classList.contains('print-option')) {
+          const index = Number(panelEl.dataset.panel);
+          const row = lookupRows[index];
+          const card = row.printings && row.printings[Number(btn.dataset.print)];
+          if (!card) return;
+          assignCard(row, card, true);
+          closePanels();
+          refreshCell(index);
+        }
+        return;
+      }
+
+      const cellEl = e.target.closest('.card-cell');
+      if (!cellEl) return;
+      const index = Number(cellEl.dataset.index);
+      const row = lookupRows[index];
+
+      if (btn && btn.dataset.action === 'retry') {
+        const name = cellEl.querySelector('.retry-input').value.trim();
+        if (!name) return;
+        btn.disabled = true;
+        try {
+          const card = await fuzzyLookup(name);
+          if (card) {
+            row.name = card.name;
+            row.setCode = null;
+            row.collectorNumber = null;
+            assignCard(row, card, false);
+            renderResults();
+          } else {
+            cellEl.querySelector('.card-cell-print').textContent = 'Still no match for "' + name + '".';
+          }
+        } finally {
+          btn.disabled = false;
+        }
+        return;
+      }
+
+      // Any other click on a resolved card's cell opens its printing picker.
+      if (!row.card) return;
+      await openPanel(index, row);
+    });
+
+    // The dropdown lives in .printing-panel, a sibling of .card-cell, and isn't a
+    // button — so it can't retrigger the cell's open/close click handler.
+    resultsEl.addEventListener('change', (e) => {
+      if (!lookupRows || !e.target.classList.contains('frame-select')) return;
+      const panelEl = e.target.closest('.printing-panel');
+      if (!panelEl) return;
+      const index = Number(panelEl.dataset.panel);
+      lookupRows[index].frameStyle = e.target.value || null;
+      refreshFrameBadge(index);
+      refreshOverrideNotice();
+    });
+
+    // Enter inside the retry box would otherwise submit the whole order form.
+    resultsEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.classList.contains('retry-input')) {
+        e.preventDefault();
+        e.target.closest('.card-cell-retry').querySelector('button').click();
+      }
+    });
+
+    lookupBtn.addEventListener('click', runLookup);
+
+    cardlistEl.addEventListener('input', () => {
+      if (!lookupRows || lookupStale) return;
+      lookupStale = true;
+      renderResults();
+    });
+
+    function lookupIsUsable() {
+      return lookupRows && !lookupStale && lookupRows.every((row) => row.card);
+    }
+
+    function canonicalCardlist() {
+      return lookupRows.map((row) => (
+        row.quantity + ' ' + row.card.name + ' (' + row.card.set.toUpperCase() + ') ' + row.card.collector_number
+      )).join('\n');
+    }
 
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
@@ -125,9 +1578,24 @@
 
       const file = form.img_source_file.files[0];
       const link = form.img_source_link.value.trim();
+      const imgSourceFlag = form.img_source_flag.value;
 
       if (file && file.size > MAX_FILE_BYTES) {
         status.textContent = 'That file is too large to upload directly. Please use the link field instead.';
+        status.className = 'error';
+        return;
+      }
+
+      if (usesFrameStyles(imgSourceFlag) && !frameStyleInput.value) {
+        status.textContent = 'Please choose a frame style for your order.';
+        status.className = 'error';
+        return;
+      }
+
+      if (SOURCES_REQUIRING_LOOKUP.includes(imgSourceFlag) && !lookupIsUsable()) {
+        status.textContent = !lookupRows || lookupStale
+          ? 'Please run "Look Up Cards" so we know which printing you want for each card.'
+          : 'Some cards could not be found. Fix them in the card list above before submitting.';
         status.className = 'error';
         return;
       }
@@ -136,13 +1604,22 @@
       status.textContent = 'Submitting...';
       status.className = '';
 
+      const usable = lookupIsUsable();
       const data = {
         name: form.name.value,
-        email: form.email.value,
-        orderSize: form.order_size.value,
-        imgSourceFlag: form.img_source_flag.value,
+        orderSize: resolvedOrderSize(),
+        imgSourceFlag: imgSourceFlag,
+        // Gated here so a style picked and then abandoned doesn't leak into the row.
+        frameStyle: usesFrameStyles(imgSourceFlag) ? frameStyleInput.value : '',
         imgSourceLink: link || null,
-        cardlist: form.cardlist.value,
+        cardlist: usable ? canonicalCardlist() : form.cardlist.value,
+        cardImages: usable && imgSourceFlag === 'scryfall'
+          ? lookupRows.map((row) => printImage(row.card)).join('\n')
+          : '',
+        // Every line resolved (defaults included) so the column stands alone.
+        cardFrameStyles: usable && usesFrameStyles(imgSourceFlag)
+          ? lookupRows.map(effectiveFrameStyle).join('\n')
+          : '',
         customRequests: form.custom_requests.value,
         imgSourceFile: null,
       };
@@ -165,7 +1642,14 @@
         status.textContent = 'Thanks! Your order was submitted.';
         status.className = 'success';
         form.reset();
-        updateImgSourceVisibility();
+        // reset() clears the hidden input but not the thumbnail's selected state.
+        frameThumbsEl.querySelectorAll('.frame-thumb.selected')
+          .forEach((el) => el.classList.remove('selected'));
+        restoreFramePreview();
+        updateSourceVisibility();
+        lookupRows = null;
+        lookupStale = false;
+        renderResults();
       } catch (err) {
         status.textContent = 'Something went wrong. Please try again.';
         status.className = 'error';
