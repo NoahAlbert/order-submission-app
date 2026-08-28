@@ -10,16 +10,38 @@ Supabase (free Postgres + file storage).
   appears when the client selects "I'm providing my own images."
 - `admin.html` — password-gated table of all orders. Lets you edit `status`,
   `paid`, and `price_quote` inline; changes save immediately. Above the table,
-  a **Pricing** editor sets the numbers the form quotes from.
+  a **Pricing** editor sets the numbers the form quotes from; below it, a
+  **Confirmed orders** table tracks the jobs whose price you've agreed.
 - `functions/api/orders/index.js` — `GET` (list, admin-only) / `POST`
   (create, public) for `/api/orders`.
 - `functions/api/orders/[id].js` — `PATCH` (admin-only) for
   `/api/orders/:id`.
 - `functions/api/pricing/index.js` — `GET` (public, feeds the quote) / `PUT`
   (admin-only) for `/api/pricing`.
+- `functions/api/confirmed-orders/index.js` — `GET` (list) / `POST` (promote an
+  order) for `/api/confirmed-orders`, both admin-only.
+- `functions/api/confirmed-orders/[id].js` — `PATCH` (admin-only) for
+  `/api/confirmed-orders/:orderId`, keyed by the **order's** id.
 - `functions/_lib.js` — shared Supabase client + admin-password check.
-- `supabase/schema.sql` — the `orders` and `pricing` tables + `order-uploads`
-  storage bucket definition (already applied to the live project).
+- `supabase/schema.sql` — the `orders`, `pricing` and `confirmed_orders` tables
+  + `order-uploads` storage bucket definition (already applied to the live
+  project).
+
+## Confirmed orders
+
+The orders table is the intake queue: everything a client submitted, as they
+submitted it. Once you've talked to someone and agreed a price, **Confirm** on
+their row promotes the order into `confirmed_orders` — a separate table holding
+only what happens afterwards, so the original submission is never edited.
+
+A confirmed order starts with its `confirmed_price` copied from the quote
+(edit it inline from there) and four independent checkboxes: **Paid**,
+**Printed**, **Cut and sleeved**, **Delivered**. The order stays visible in the
+table above, with its Confirm button replaced by a "Confirmed" label.
+
+An order submitted **unsleeved** has no sleeving step, so its *Cut and sleeved*
+box is ticked when the order is confirmed and shown greyed out. The API enforces
+the same rule: `PATCH` refuses to unset that flag on an unsleeved order.
 
 ## Fields
 
@@ -34,6 +56,7 @@ Supabase (free Postgres + file storage).
 | img_source_flag | client | enum | `scryfall` / `custom-frames` / `custom-art` / `client` |
 | img_source | app/client | text, nullable | Supabase Storage public URL if a file was uploaded, or the link the client pasted |
 | cardlist | client | text | one card per line |
+| sleeving | client | enum | `none` / `penny` / `colored`; defaults to `none`, priced into the quote |
 | price_quote | **you** | numeric, nullable | starts blank, edited in the admin page |
 | paid | **you** | bool | starts `false`, edited in the admin page |
 | custom_requests | client | text, nullable | free-form notes |
@@ -41,17 +64,30 @@ Supabase (free Postgres + file storage).
 `status`, `price_quote`, and `paid` are intentionally not on the public form
 — a client shouldn't be able to set their own price or mark an order paid.
 
+`confirmed_orders` holds one row per confirmed order, keyed by the order's id:
+
+| Column | Set by | Type | Notes |
+|---|---|---|---|
+| order_id | app | uuid | primary key, references `orders.id`; deleting the order deletes this |
+| confirmed_at | app | timestamptz | auto |
+| confirmed_price | **you** | numeric, nullable | seeded from the order's `price_quote`, then edited |
+| paid | **you** | bool | starts `false` |
+| printed | **you** | bool | starts `false` |
+| cut_and_sleeved | **you** | bool | starts `true` for unsleeved orders, and locked there |
+| delivered | **you** | bool | starts `false` |
+
 ## Quoting
 
 The bottom of the order form, just above **Submit Order**, shows a running
-estimate. It has no inputs of its own — it reads Order Size and Image Source
-from the form above it, so it can never quote something different from what
-gets submitted.
+estimate. It has no inputs of its own — it reads Order Size, Image Source and
+Sleeving from the form above it, so it can never quote something different from
+what gets submitted.
 
-A quote is always two lines: the **base** rate, plus the one row matching the
-chosen image source. Each row carries a per-sheet rate and a flat full-deck
-rate, and the order-size mode picks which one applies (`N sheets × per_sheet`,
-or `per_deck` once for a Commander deck).
+A quote is always three lines: the **base** rate, the row matching the chosen
+image source, and the row matching the chosen sleeving. Each row carries a
+per-sheet rate and a flat full-deck rate, and the order-size mode picks which
+one applies (`N sheets × per_sheet`, or `per_deck` once for a Commander deck).
+An aspect that costs nothing is still shown, as "Included" rather than $0.00.
 
 | Aspect | Per sheet | Full deck | Quoted total |
 |---|---|---|---|
@@ -64,6 +100,19 @@ or `per_deck` once for a Commander deck).
 A row flagged **minimum** makes its quote a floor: the form shows "from $X"
 and explains that the final price depends on the work involved. Full Custom is
 the only one seeded that way.
+
+**Sleeving** is priced the same way but added on top rather than chosen
+instead of a source, so a quote is base + image source + sleeving:
+
+| Sleeving | Per sheet | Full deck |
+| --- | --- | --- |
+| Unsleeved | — | — |
+| Penny Sleeves | $0.00 | $1.25 |
+| Colored Sleeves | $0.00 | $4.00 |
+
+Unsleeved has no `pricing` row: it is free by definition. The per-sheet rates
+are seeded at $0, so by-the-sheet orders add nothing for sleeving until you
+fill those two numbers in from the Pricing panel.
 
 Every one of those numbers — including the minimum flag — is edited in the
 admin page's Pricing panel and stored in the `pricing` table; nothing is
@@ -111,11 +160,14 @@ use the `wrangler pages deploy` command above after pushing.
 
 ## Supabase setup
 
-**The `pricing` table is new — run `supabase/migrations/0002_pricing.sql` in
-the live project's SQL Editor once.** Until you do, `GET /api/pricing` returns
-an error and the form falls back to the hardcoded defaults (the same numbers),
-so the quote still shows — but the admin page's Pricing panel won't load and
-saving from it won't work.
+**Run `supabase/migrations/0003_sleeving_and_confirmed_orders.sql` in the live
+project's SQL Editor once.** It adds the `sleeving` column to `orders`, the two
+sleeving rows to `pricing`, and the `confirmed_orders` table. Until you do,
+submitting an order fails (the form now sends `sleeving`), and the admin page's
+Confirmed orders table won't load.
+
+Migrations are cumulative and each is safe to re-run; if a project is further
+behind, apply the earlier files in `supabase/migrations/` in order first.
 
 ### Recreating from scratch (already done for the live project)
 
