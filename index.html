@@ -1009,7 +1009,6 @@
       return Boolean(row.frameStyle) && row.frameStyle !== frameStyleInput.value;
     }
 
-
     // A group is the copies that came off one decklist line. Identity is the
     // line, never the card name: `2 Sol Ring (LEA)` and `2 Sol Ring (C21)` are a
     // deliberate request for two different printings, and the retry flow renames
@@ -1027,7 +1026,6 @@
         row.frameStyle === rows[0].frameStyle
       ));
     }
-
 
     // The caveat rides the preview rather than the thumbnail so it shows on hover
     // too — before the click is when it can still change the client's mind.
