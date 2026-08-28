@@ -107,6 +107,10 @@
      order rows scrolling underneath it. */
   th { background: var(--surface-2); position: sticky; top: 0; }
   td.wrap { max-width: 220px; white-space: pre-wrap; word-break: break-word; }
+  /* Card lists are one line per physical card now, so a full deck is 104 lines.
+     max-height is ignored on a table-cell, hence the inner div: without it a
+     single order stretches its whole row off the screen. */
+  td.wrap .cell-scroll { max-height: 12rem; overflow-y: auto; }
   select, input[type="number"] {
     padding: 0.3rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
     font-size: 0.85rem; width: 100%; box-sizing: border-box;
@@ -422,7 +426,7 @@
           <td>${order.order_size}</td>
           <td class="img-cell">${escapeHtml(order.img_source_flag)}</td>
           <td>${escapeHtml(sleevingLabel(order.sleeving))}</td>
-          <td class="wrap">${escapeHtml(order.cardlist)}</td>
+          <td class="wrap"><div class="cell-scroll">${escapeHtml(order.cardlist)}</div></td>
           <td class="wrap">${escapeHtml(order.custom_requests || '')}</td>
           <td class="price-cell"></td>
           <td class="paid-cell"></td>

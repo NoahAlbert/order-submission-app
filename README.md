@@ -52,10 +52,10 @@ the same rule: `PATCH` refuses to unset that flag on an unsleeved order.
 | name | client | text | |
 | email | client | text | |
 | status | **you** | enum | `new` / `wip` / `complete` / `delivered`; starts at `new`, edited in the admin page |
-| order_size | client | int | number of cards |
+| order_size | client | int | number of card slots — sheets x 8, or 104 for a full deck |
 | img_source_flag | client | enum | `scryfall` / `custom-frames` / `custom-art` / `client` |
 | img_source | app/client | text, nullable | Supabase Storage public URL if a file was uploaded, or the link the client pasted |
-| cardlist | client | text | one card per line |
+| cardlist | client | text | one line per physical card, line-aligned with `card_images` and `card_frame_styles` |
 | sleeving | client | enum | `none` / `penny` / `colored`; defaults to `none`, priced into the quote |
 | price_quote | **you** | numeric, nullable | starts blank, edited in the admin page |
 | paid | **you** | bool | starts `false`, edited in the admin page |
@@ -88,6 +88,12 @@ image source, and the row matching the chosen sleeving. Each row carries a
 per-sheet rate and a flat full-deck rate, and the order-size mode picks which
 one applies (`N sheets × per_sheet`, or `per_deck` once for a Commander deck).
 An aspect that costs nothing is still shown, as "Included" rather than $0.00.
+
+A print sheet holds **8 cards** and a full deck is **13 sheets = 104 card
+slots** — not the format's 100, because the sheet is the unit that actually
+gets printed. The form checks the submitted card list against that number and
+says so when they differ; it warns rather than blocks, since a short list just
+leaves spare slots and an over-full one is fixed by adding a sheet.
 
 | Aspect | Per sheet | Full deck | Quoted total |
 |---|---|---|---|

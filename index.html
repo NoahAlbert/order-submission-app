@@ -497,11 +497,24 @@
   #lookup-results.stale { opacity: 0.45; }
   #lookup-summary { font-size: var(--text-md); color: var(--fg-muted); margin-bottom: var(--space-3); }
 
-  #stale-notice, #frame-override-notice {
+  #stale-notice, #frame-override-notice, #order-check-notice {
     font-size: var(--text-md);
     border-radius: var(--radius);
     padding: 0.55rem 0.75rem;
     margin-bottom: var(--space-3);
+  }
+  /* Sits directly above Submit Order, so it reads as part of the decision rather
+     than as an error thrown back at the client. Tone by outcome: a short list is
+     a warning, an over-full one loses cards and gets the danger colour. */
+  #order-check-notice { line-height: 1.45; }
+  #order-check-notice[data-kind="exact"] {
+    color: var(--success); background: var(--success-bg); border: 1px solid var(--success-border);
+  }
+  #order-check-notice[data-kind="short"] {
+    color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border);
+  }
+  #order-check-notice[data-kind="over"] {
+    color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-border);
   }
   #stale-notice { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); }
   #frame-override-notice { color: var(--purple); background: var(--purple-bg); border: 1px solid var(--purple-border); }
@@ -593,6 +606,12 @@
   .badge-unresolved { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
   .badge-picked { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
   .badge-frame { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+  /* Neutral on purpose: which copy this is, is metadata, not a status to react to. */
+  .badge-copy { background: var(--surface-2); color: var(--fg-muted); border-color: var(--border); }
+  /* The badge and its sync button are wrapped only so they can be replaced as one
+     unit; display:contents keeps them separate items of the actions flex row. */
+  .card-cell-copy { display: contents; }
+  .card-cell-copy .link-btn { font-size: var(--text-xs); }
 
   .card-cell-retry { margin-top: var(--space-2); display: flex; gap: var(--space-1); }
   .card-cell-retry input {
@@ -663,6 +682,7 @@
   .printing-panel .loading { font-size: var(--text-md); color: var(--fg-muted); }
   .panel-section { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
   .panel-section-title { font-size: var(--text-md); font-weight: 600; margin-bottom: var(--space-2); }
+  .panel-section-body { font-size: var(--text-sm); color: var(--fg-muted); line-height: 1.45; }
   .frame-select { max-width: 320px; margin-bottom: 0; }
 
   .print-option {
@@ -746,7 +766,7 @@
         <label for="order_size_mode">Order Size</label>
         <select id="order_size_mode" name="order_size_mode" required>
           <option value="" disabled selected>Select one</option>
-          <option value="commander">Full Commander Deck</option>
+          <option value="commander">Full Deck (13 sheets · 104 cards)</option>
           <option value="sheets">Order by sheet</option>
         </select>
       </div>
@@ -834,6 +854,8 @@
       <div id="quote-box"></div>
     </div>
 
+    <div id="order-check"></div>
+
     <button type="submit">Submit Order</button>
     <div id="status"></div>
 
@@ -851,6 +873,10 @@
     const SCRYFALL = 'https://api.scryfall.com';
     const COLLECTION_BATCH = 75; // Scryfall's hard cap per /cards/collection request
     const SOURCES_REQUIRING_LOOKUP = ['scryfall', 'custom-frames'];
+    // A fat-fingered `1000 Island` costs one wasted tile today; once every copy
+    // is its own tile it would cost 1000 grid cells and 1000 <img> elements, so
+    // the fan-out is capped at a number no real order reaches.
+    const MAX_COPIES_PER_LINE = 100;
     // Full Custom supplies its own art but still gets printed in one of our
     // frame treatments, so it uses the same frame selection as Custom Frames.
     const SOURCES_WITH_FRAMES = ['custom-frames', 'custom-art'];
@@ -993,6 +1019,24 @@
       return Boolean(row.frameStyle) && row.frameStyle !== frameStyleInput.value;
     }
 
+    // A group is the copies that came off one decklist line. Identity is the
+    // line, never the card name: `2 Sol Ring (LEA)` and `2 Sol Ring (C21)` are a
+    // deliberate request for two different printings, and the retry flow renames
+    // rows in place, so name-based grouping would silently re-bucket them.
+    function rowsInGroup(groupId) {
+      return lookupRows ? lookupRows.filter((row) => row.groupId === groupId) : [];
+    }
+
+    // Compared by card id rather than object identity: two copies can reach the
+    // same printing down different paths, one auto-resolved and one hand-picked.
+    function groupIsSynced(groupId) {
+      const rows = rowsInGroup(groupId);
+      return rows.every((row) => (
+        (row.card && row.card.id) === (rows[0].card && rows[0].card.id) &&
+        row.frameStyle === rows[0].frameStyle
+      ));
+    }
+
     // The caveat rides the preview rather than the thumbnail so it shows on hover
     // too — before the click is when it can still change the client's mind.
     function showFramePreview(style) {
@@ -1079,10 +1123,12 @@
     imgSourceFlagEl.addEventListener('change', updateSourceVisibility);
     updateSourceVisibility();
 
-    // A print sheet holds 8 cards, and a Commander deck is the 100-card format,
-    // so both choices resolve to a plain card count for the sheet.
+    // A print sheet holds 8 cards and a full deck run is 13 of them, so a full
+    // deck is 104 slots — not the format's 100. The sheet is the unit that
+    // actually gets printed, and the 4 extra slots get filled rather than wasted.
     const CARDS_PER_SHEET = 8;
-    const COMMANDER_DECK_CARDS = 100;
+    const FULL_DECK_SHEETS = 13;
+    const COMMANDER_DECK_CARDS = FULL_DECK_SHEETS * CARDS_PER_SHEET;
 
     function sheetCount() {
       const value = parseInt(orderSizeEl.value, 10);
@@ -1106,12 +1152,96 @@
       if (bySheet) updateSheetMath();
     }
 
-    // The sheet's Order Size column is a card count, so both modes land there
-    // as one: a Commander deck is 100 cards, and N sheets is N * 8.
-    function resolvedOrderSize() {
-      if (orderSizeModeEl.value === 'commander') return String(COMMANDER_DECK_CARDS);
+    // The number of physical card slots the order pays for: a full deck is 13
+    // sheets, and N sheets is N * 8. Null until the client has said enough to
+    // know — an empty sheet count is not zero slots, it is "not yet answered".
+    function orderedSlots() {
+      if (orderSizeModeEl.value === 'commander') return COMMANDER_DECK_CARDS;
+      if (orderSizeModeEl.value !== 'sheets') return null;
       const sheets = sheetCount();
-      return sheets === null ? '' : String(sheets * CARDS_PER_SHEET);
+      return sheets === null ? null : sheets * CARDS_PER_SHEET;
+    }
+
+    // The sheet's Order Size column is that same count as a string. Deriving it
+    // from orderedSlots() rather than recomputing means the check above the
+    // submit button can never claim a different order size than gets submitted.
+    function resolvedOrderSize() {
+      const slots = orderedSlots();
+      return slots === null ? '' : String(slots);
+    }
+
+    // Counted from the lookup when there is one, since that reflects retries and
+    // hand-picks; from the raw textarea otherwise. parseCardLines is pure and
+    // costs no network, so there's no reason to withhold the count until the
+    // client presses Look Up Cards — and Full Custom needs a card list but never
+    // needs a lookup, which is exactly where a miscount is most expensive.
+    // The raw count is pre-resolution, so an unfindable line still counts: that's
+    // right, the question here is how many slots the order fills, and the submit
+    // handler already refuses card lists it couldn't resolve.
+    function decklistCardCount() {
+      if (lookupRows && !lookupStale) return lookupRows.length;
+      // Hidden for client-supplied images, where there is no list to count and
+      // I can't count the cards inside someone's zip either.
+      if (cardlistSection.hidden || !cardlistEl.value.trim()) return null;
+      return parseCardLines(cardlistEl.value)
+        .reduce((sum, line) => sum + Math.min(line.quantity, MAX_COPIES_PER_LINE), 0);
+    }
+
+    // One evaluator, so the notice above the submit button and the lookup summary
+    // can never disagree about whether an order is short or over.
+    function orderCheck() {
+      const slots = orderedSlots();
+      const count = decklistCardCount();
+      if (slots === null || count === null) return null;
+      return {
+        kind: count === slots ? 'exact' : (count < slots ? 'short' : 'over'),
+        count, slots,
+        diff: Math.abs(slots - count),
+        sheets: slots / CARDS_PER_SHEET,
+        needed: Math.ceil(count / CARDS_PER_SHEET),
+      };
+    }
+
+    function cardWord(n) {
+      return n + (n === 1 ? ' card' : ' cards');
+    }
+
+    function orderCheckHtml() {
+      const check = orderCheck();
+      if (!check) return '';
+      const ordered = "you've ordered " + check.slots + ' slots (' + check.sheets
+        + (check.sheets === 1 ? ' sheet)' : ' sheets)');
+
+      if (check.kind === 'exact') {
+        return '<div id="order-check-notice" data-kind="exact">' +
+          cardWord(check.count) + ' for ' + check.slots + ' slots — a perfect fit.</div>';
+      }
+
+      if (check.kind === 'short') {
+        return '<div id="order-check-notice" data-kind="short">' +
+          'Your list is ' + cardWord(check.count) + ' and ' + ordered + '. That leaves '
+          + check.diff + " spare — I'll fill those with cards for my personal collection. "
+          + 'Add ' + check.diff + " more if you'd rather use them yourself.</div>";
+      }
+
+      // The only case that actually loses a client's cards, so it gets the danger
+      // tone and names the sheet count that would fit rather than making them
+      // divide by 8 themselves.
+      const fix = orderSizeModeEl.value === 'commander'
+        ? 'Switch to ordering by sheet — ' + cardWord(check.count) + ' needs ' + check.needed + ' — or trim '
+          + check.diff + '.'
+        : 'Bump the sheet count to ' + check.needed + ' (' + (check.needed * CARDS_PER_SHEET)
+          + ' slots), or trim ' + check.diff + '.';
+      return '<div id="order-check-notice" data-kind="over">' +
+        'Your list is ' + cardWord(check.count) + ' but ' + ordered + ', so ' + check.diff
+        + " won't fit. " + fix + '</div>';
+    }
+
+    // Deliberately never blocks submit: a client who wants a few spare slots is
+    // placing a perfectly valid order, and a live warning they can act on beats a
+    // confirm() in front of a deliberate choice.
+    function refreshOrderCheck() {
+      orderCheckEl.innerHTML = orderCheckHtml();
     }
 
     orderSizeModeEl.addEventListener('change', updateOrderSizeVisibility);
@@ -1125,6 +1255,7 @@
     // reads them.
 
     const quoteBox = document.getElementById('quote-box');
+    const orderCheckEl = document.getElementById('order-check');
     const sleevingEl = document.getElementById('sleeving');
 
     // Sleeving choice -> pricing row id. Unsleeved has no row: it is free by
@@ -1185,7 +1316,7 @@
       const rate = (row) => Number(byDeck ? row.per_deck : row.per_sheet) || 0;
       const amount = (row) => (byDeck ? rate(row) : rate(row) * sheets);
       const detail = (row) => (byDeck
-        ? 'Full Commander Deck'
+        ? 'Full Deck (13 sheets)'
         : sheets + (sheets === 1 ? ' sheet × ' : ' sheets × ') + fmtMoney(rate(row)));
 
       // A zero-rate source is priced, just at nothing extra — saying so beats
@@ -1225,6 +1356,13 @@
     imgSourceFlagEl.addEventListener('change', renderQuote);
     sleevingEl.addEventListener('change', renderQuote);
     renderQuote();
+
+    // Same reasoning as the quote's own listeners above: the image source is in
+    // here too because it decides whether there's a card list to count at all.
+    orderSizeModeEl.addEventListener('change', refreshOrderCheck);
+    orderSizeEl.addEventListener('input', refreshOrderCheck);
+    imgSourceFlagEl.addEventListener('change', refreshOrderCheck);
+    refreshOrderCheck();
 
     (async function loadPricing() {
       try {
@@ -1310,6 +1448,34 @@
       return rows;
     }
 
+    // Parsing and lookup stay per LINE — `4 Sol Ring` is one identifier in the
+    // /cards/collection batch and one fuzzy retry, not four. Copies only fan out
+    // once every line has its card, so the network cost is exactly what it was
+    // while the grid and the three submitted columns become per physical card.
+    function expandCopies(lines) {
+      const rows = [];
+      lines.forEach((line, groupId) => {
+        const groupSize = Math.min(line.quantity, MAX_COPIES_PER_LINE);
+        for (let copyIndex = 1; copyIndex <= groupSize; copyIndex++) {
+          // `card` is shared by reference across copies on purpose. It reads like
+          // aliasing, but Scryfall card objects are never mutated here — assignCard
+          // replaces the reference wholesale — so a copy can be re-picked without
+          // disturbing its siblings.
+          rows.push({
+            groupId, copyIndex, groupSize,
+            raw: line.raw,
+            name: line.name,
+            setCode: line.setCode,
+            collectorNumber: line.collectorNumber,
+            card: line.card,
+            status: line.status,
+            frameStyle: line.frameStyle,
+          });
+        }
+      });
+      return rows;
+    }
+
     // Double-faced layouts carry art on card_faces instead of a top-level image_uris.
     function imageFor(card, size) {
       if (card.image_uris && card.image_uris[size]) return card.image_uris[size];
@@ -1380,8 +1546,8 @@
     }
 
     async function runLookup() {
-      const rows = parseCardLines(cardlistEl.value);
-      if (!rows.length) {
+      const lines = parseCardLines(cardlistEl.value);
+      if (!lines.length) {
         lookupStatus.textContent = 'Nothing to look up — add some cards first.';
         lookupStatus.className = 'error';
         return;
@@ -1389,16 +1555,18 @@
 
       lookupBtn.disabled = true;
       lookupStatus.className = '';
-      lookupStatus.textContent = 'Looking up ' + rows.length + ' card' + (rows.length === 1 ? '' : 's') + '...';
+      const copies = lines.reduce((sum, line) => sum + Math.min(line.quantity, MAX_COPIES_PER_LINE), 0);
+      lookupStatus.textContent = 'Looking up ' + lines.length + ' line' + (lines.length === 1 ? '' : 's')
+        + ' (' + copies + ' card' + (copies === 1 ? '' : 's') + ')...';
       resultsEl.innerHTML = '';
 
       try {
-        await resolveInto(rows);
+        await resolveInto(lines);
 
         // A stale collector number resolves to a real card of the wrong name
         // (2XM 129 is Grim Lavamancer, not Lightning Bolt), so trust the name
         // over the number and re-resolve those against the set alone.
-        const mismatched = rows.filter((row) => (
+        const mismatched = lines.filter((row) => (
           row.card && row.collectorNumber && !nameMatches(row.card, row.name)
         ));
         for (const row of mismatched) {
@@ -1408,7 +1576,7 @@
         if (mismatched.length) await resolveInto(mismatched);
 
         // Anything unmatched gets one fuzzy retry, which rescues most typos.
-        const misses = rows.filter((row) => !row.card);
+        const misses = lines.filter((row) => !row.card);
         for (const row of misses) {
           const card = await fuzzyLookup(row.name);
           if (!card) continue;
@@ -1418,10 +1586,13 @@
 
         // Fuzzy ignores the requested set, so retry those now that the name is
         // spelled correctly — otherwise a typo silently discards a valid set code.
-        const setRetry = rows.filter((row) => row.card && row.setCode && row.card.set !== row.setCode);
+        const setRetry = lines.filter((row) => row.card && row.setCode && row.card.set !== row.setCode);
         if (setRetry.length) await resolveInto(setRetry);
 
-        lookupRows = rows;
+        // Expanded only now: everything above needed one row per line to keep the
+        // collection batch and the throttled fuzzy retries at one request per
+        // distinct card rather than one per physical copy.
+        lookupRows = expandCopies(lines);
         lookupStale = false;
         lookupStatus.textContent = '';
         renderResults();
@@ -1460,53 +1631,95 @@
       return '<span class="badge badge-frame">' + escapeHtml(frameStyleLabel(row.frameStyle)) + '</span>';
     }
 
+    // Copies are independent by default, so the chip is what makes "these four
+    // belong together" visible on the tile itself, and it turns into the sync
+    // action only once a group has actually diverged — an always-on button would
+    // be noise on the majority of groups that were never touched.
+    function copyChipHtml(row) {
+      if (row.groupSize < 2) return '';
+      // display:contents on the wrapper, so grouping the badge and the button for
+      // replacement doesn't turn them into one item of the actions flex row.
+      return '<span class="card-cell-copy">' +
+        '<span class="badge badge-copy">copy ' + row.copyIndex + ' of ' + row.groupSize + '</span>' +
+        (groupIsSynced(row.groupId)
+          ? ''
+          : '<button type="button" class="link-btn" data-action="sync-copies">' +
+            'sync ' + row.groupSize + ' copies</button>') +
+      '</span>';
+    }
+
     // Each cell is followed by its own full-width panel, so an expanded picker
     // pushes the grid open beneath the card it belongs to.
     function cellHtml(row, index) {
       const panel = '<div class="printing-panel" data-panel="' + index + '" hidden></div>';
-      const qty = ' <span class="qty">×' + row.quantity + '</span>';
+      // Every row is one physical card now, so the label says which copy this is
+      // rather than how many the line asked for.
+      const qty = row.groupSize > 1
+        ? ' <span class="qty">' + row.copyIndex + '/' + row.groupSize + '</span>'
+        : '';
+      const group = ' data-group="' + row.groupId + '"';
 
       if (!row.card) {
-        return '<div class="card-cell" data-index="' + index + '" data-status="unresolved">' +
+        return '<div class="card-cell" data-index="' + index + '"' + group + ' data-status="unresolved">' +
           '<div class="card-art card-art-empty">?</div>' +
           '<div class="card-cell-name">' + escapeHtml(row.name) + qty + '</div>' +
           '<div class="card-cell-print">No card matched this line.</div>' +
-          '<div class="card-cell-actions"><span class="badge badge-unresolved">' + BADGES.unresolved + '</span></div>' +
+          '<div class="card-cell-actions"><span class="badge badge-status badge-unresolved">' + BADGES.unresolved + '</span></div>' +
           '<div class="card-cell-retry">' +
             '<input type="text" class="retry-input" value="' + escapeHtml(row.name) + '">' +
             '<button type="button" class="btn-ghost" data-action="retry">Find</button>' +
           '</div>' +
+          // A line fails as a line, so the fix lands on every copy of it. Said out
+          // loud here so the group behaviour isn't a surprise.
+          (row.groupSize > 1
+            ? '<div class="card-cell-note">Fixes all ' + row.groupSize + ' copies.</div>'
+            : '') +
         '</div>' + panel;
       }
 
-      return '<div class="card-cell" data-index="' + index + '" data-status="' + row.status + '">' +
+      return '<div class="card-cell" data-index="' + index + '"' + group + ' data-status="' + row.status + '">' +
         '<img class="card-art" src="' + escapeHtml(imageFor(row.card, 'normal')) + '" alt="" loading="lazy">' +
         '<div class="card-cell-name">' + escapeHtml(row.card.name) + qty + '</div>' +
         '<div class="card-cell-print">' + escapeHtml(printingLabel(row.card)) + '</div>' +
         setNote(row) +
         '<div class="card-cell-actions">' +
-          '<span class="badge badge-' + row.status + '">' + BADGES[row.status] + '</span>' +
+          '<span class="badge badge-status badge-' + row.status + '">' + BADGES[row.status] + '</span>' +
           frameBadgeHtml(row) +
+          copyChipHtml(row) +
           '<span class="hint-inline">click to change printing</span>' +
         '</div>' +
       '</div>' + panel;
     }
 
     function summaryText() {
-      const total = lookupRows.reduce((sum, row) => sum + row.quantity, 0);
+      // One row per physical card now, so the row count IS the card count and the
+      // line count has to be recovered from the groups. Status counts are per card
+      // too — a typo'd playset reads "4 not found", which is the honest unit and
+      // clears in a single retry.
+      const total = lookupRows.length;
+      const lines = new Set(lookupRows.map((row) => row.groupId)).size;
       const counts = { matched: 0, review: 0, picked: 0, unresolved: 0 };
       for (const row of lookupRows) counts[row.status]++;
-      const parts = [lookupRows.length + ' lines · ' + total + ' cards'];
+      const parts = [lines + ' line' + (lines === 1 ? '' : 's') + ' · ' + total + ' cards'];
       if (counts.matched) parts.push(counts.matched + ' matched');
       if (counts.picked) parts.push(counts.picked + ' hand-picked');
       if (counts.review) parts.push(counts.review + ' to review');
       if (counts.unresolved) parts.push(counts.unresolved + ' not found');
+      // A short echo of the slot check, so it stays in view while the client is
+      // working down in the grid, far from the notice above the submit button.
+      const check = orderCheck();
+      if (check && check.kind !== 'exact') {
+        parts.push(check.kind === 'short'
+          ? check.diff + ' of ' + check.slots + ' slots spare'
+          : check.diff + ' over the ' + check.slots + ' ordered');
+      }
       return parts.join(' · ');
     }
 
     function renderResults() {
       if (!lookupRows) {
         resultsEl.innerHTML = '';
+        refreshOrderCheck();
         return;
       }
       resultsEl.className = lookupStale ? 'stale' : '';
@@ -1515,6 +1728,10 @@
         '<div id="lookup-summary">' + escapeHtml(summaryText()) + '</div>' +
         overrideNoticeHtml() +
         '<div id="card-grid">' + lookupRows.map(cellHtml).join('') + '</div>';
+      // Hooked here rather than at each call site: a finished lookup upgrades the
+      // count from "parsed from the textarea" to "one row per resolved card", and
+      // the post-submit reset clears it — both land through renderResults().
+      refreshOrderCheck();
     }
 
     function refreshCell(index) {
@@ -1526,8 +1743,8 @@
       cellEl.querySelector('.card-cell-print').textContent = printingLabel(row.card);
       const note = cellEl.querySelector('.card-cell-note');
       if (note) note.remove();
-      const badge = cellEl.querySelector('.badge');
-      badge.className = 'badge badge-' + row.status;
+      const badge = cellEl.querySelector('.badge-status');
+      badge.className = 'badge badge-status badge-' + row.status;
       badge.textContent = BADGES[row.status];
       const summary = document.getElementById('lookup-summary');
       if (summary) summary.textContent = summaryText();
@@ -1544,7 +1761,33 @@
       if (existing) existing.remove();
       const html = frameBadgeHtml(lookupRows[index]);
       if (!html) return;
-      actions.querySelector('.badge').insertAdjacentHTML('afterend', html);
+      actions.querySelector('.badge-status').insertAdjacentHTML('afterend', html);
+    }
+
+    // Divergence is a property of the whole group, so one copy changing printing
+    // has to re-evaluate every sibling's chip, not just the tile that changed.
+    // Same reason refreshFrameBadge exists: renderResults() would slam an open
+    // panel shut mid-interaction.
+    function refreshGroupSync(groupId) {
+      resultsEl.querySelectorAll('.card-cell[data-group="' + groupId + '"]').forEach((cellEl) => {
+        const chip = cellEl.querySelector('.card-cell-copy');
+        if (!chip) return;
+        chip.outerHTML = copyChipHtml(lookupRows[Number(cellEl.dataset.index)]);
+      });
+    }
+
+    // Copies are independent by default, so this is the one explicit "make them
+    // match" move. card, frameStyle and status all copy across verbatim: every
+    // copy in a group shares the same setCode, so the source's status is exactly
+    // the status a sibling would have earned for that printing — recomputing it,
+    // or forcing 'picked', would just make setNote() lie.
+    function syncCopies(index) {
+      const source = lookupRows[index];
+      for (const row of rowsInGroup(source.groupId)) {
+        row.card = source.card;
+        row.status = source.status;
+        row.frameStyle = source.frameStyle;
+      }
     }
 
     function overrideCount() {
@@ -1661,6 +1904,24 @@
       '</div>';
     }
 
+    // The flat auto-fill grid has nowhere to hang a per-group header without
+    // forcing every group onto its own row, so the group-wide action lives here
+    // instead — right where the client has just made the choice they'd want to
+    // push, with room for a sentence explaining it.
+    function syncSectionHtml(row) {
+      if (row.groupSize < 2) return '';
+      const others = row.groupSize - 1;
+      return '<div class="panel-section">' +
+        '<div class="panel-section-title">Copies</div>' +
+        '<div class="panel-section-body">' +
+          escapeHtml(row.card.name) + ' has ' + others + ' other cop' + (others === 1 ? 'y' : 'ies') +
+          ' in this order, each picked separately. ' +
+          '<button type="button" class="link-btn" data-action="sync-copies">' +
+            'Give all ' + row.groupSize + ' this printing and frame</button>' +
+        '</div>' +
+      '</div>';
+    }
+
     function stripHtml(row, card, printings, hiddenCount) {
       const hidden = hiddenCount
         ? ' · ' + hiddenCount + ' foil duplicate' + (hiddenCount === 1 ? '' : 's') + ' hidden'
@@ -1693,7 +1954,8 @@
           '<div class="printing-strip">' + options + '</div>' +
           preview +
         '</div>' +
-        frameSectionHtml(row)
+        frameSectionHtml(row) +
+        syncSectionHtml(row)
       );
     }
 
@@ -1775,6 +2037,20 @@
         return;
       }
 
+      // The sync button ships in both the tile and the panel, so take the row from
+      // whichever wrapper it arrived in rather than duplicating the branch. This
+      // has to run before the cell branch below, which treats any click on a
+      // resolved cell as "open the printing picker".
+      if (btn && btn.dataset.action === 'sync-copies') {
+        const wrap = btn.closest('.card-cell, .printing-panel');
+        if (!wrap) return;
+        syncCopies(Number('index' in wrap.dataset ? wrap.dataset.index : wrap.dataset.panel));
+        // A group-wide change is coarse and explicit, so a full re-render — panel
+        // shut included — is the right feedback, same as apply-frame-to-all above.
+        renderResults();
+        return;
+      }
+
       // Picking a printing, or closing the panel, only fires from its own buttons.
       const panelEl = btn && btn.closest('.printing-panel');
       if (panelEl) {
@@ -1790,6 +2066,7 @@
           assignCard(row, card, true);
           closePanels();
           refreshCell(index);
+          refreshGroupSync(row.groupId);
         }
         return;
       }
@@ -1806,10 +2083,16 @@
         try {
           const card = await fuzzyLookup(name);
           if (card) {
-            row.name = card.name;
-            row.setCode = null;
-            row.collectorNumber = null;
-            assignCard(row, card, false);
+            // A line fails as a line: all N copies of a mistyped name are broken for
+            // the same reason and render the same retry box, so the correction lands
+            // on the whole group. Independence is about which printing a copy gets,
+            // and a card that never resolved doesn't have one yet.
+            for (const copy of rowsInGroup(row.groupId)) {
+              copy.name = card.name;
+              copy.setCode = null;
+              copy.collectorNumber = null;
+              assignCard(copy, card, false);
+            }
             renderResults();
           } else {
             cellEl.querySelector('.card-cell-print').textContent = 'Still no match for "' + name + '".';
@@ -1834,6 +2117,7 @@
       const index = Number(panelEl.dataset.panel);
       lookupRows[index].frameStyle = e.target.value || null;
       refreshFrameBadge(index);
+      refreshGroupSync(lookupRows[index].groupId);
       refreshOverrideNotice();
     });
 
@@ -1848,6 +2132,9 @@
     lookupBtn.addEventListener('click', runLookup);
 
     cardlistEl.addEventListener('input', () => {
+      // Before the early return below: once the list goes stale the count falls
+      // back to the textarea, and that is exactly when the client is editing it.
+      refreshOrderCheck();
       if (!lookupRows || lookupStale) return;
       lookupStale = true;
       renderResults();
@@ -1857,9 +2144,13 @@
       return lookupRows && !lookupStale && lookupRows.every((row) => row.card);
     }
 
+    // One line per physical card, in lockstep with cardImages and cardFrameStyles
+    // below — those three columns get read side by side, so a `4 Sol Ring`
+    // shorthand in one of them knocks all three out of alignment. The leading 1
+    // stays so the column is still a paste-able decklist.
     function canonicalCardlist() {
       return lookupRows.map((row) => (
-        row.quantity + ' ' + row.card.name + ' (' + row.card.set.toUpperCase() + ') ' + row.card.collector_number
+        '1 ' + row.card.name + ' (' + row.card.set.toUpperCase() + ') ' + row.card.collector_number
       )).join('\n');
     }
 
