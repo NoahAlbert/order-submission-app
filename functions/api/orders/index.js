@@ -1,6 +1,7 @@
 import { createSupabaseClient, requireAdmin, json } from '../../_lib.js';
 
 const VALID_IMG_SOURCE_FLAGS = ['scryfall', 'custom-frames', 'custom-art', 'client'];
+const VALID_SLEEVING = ['none', 'penny', 'colored'];
 
 // GET /api/orders — admin-only, lists all orders.
 export async function onRequestGet(context) {
@@ -23,7 +24,7 @@ export async function onRequestPost(context) {
   const {
     name, email, orderSize, imgSourceFlag, imgSourceLink,
     cardlist, customRequests, imgSourceFile,
-    frameStyle, cardImages, cardFrameStyles,
+    frameStyle, cardImages, cardFrameStyles, sleeving,
   } = body;
 
   // Email is optional: the form stopped collecting it. "I'm providing my own
@@ -35,6 +36,12 @@ export async function onRequestPost(context) {
   }
   if (!VALID_IMG_SOURCE_FLAGS.includes(imgSourceFlag)) {
     return json({ error: 'Invalid img_source_flag' }, 400);
+  }
+  // Absent means unsleeved — the form defaults to it, and a stale cached copy
+  // of the page that predates the field should still submit cleanly.
+  const sleevingValue = sleeving || 'none';
+  if (!VALID_SLEEVING.includes(sleevingValue)) {
+    return json({ error: 'Invalid sleeving' }, 400);
   }
 
   const supabase = createSupabaseClient(context.env);
@@ -68,6 +75,7 @@ export async function onRequestPost(context) {
       frame_style: frameStyle || null,
       card_images: cardImages || null,
       card_frame_styles: cardFrameStyles || null,
+      sleeving: sleevingValue,
     })
     .select()
     .single();

@@ -15,7 +15,8 @@ create table public.orders (
   custom_requests text,
   frame_style text,
   card_images text,
-  card_frame_styles text
+  card_frame_styles text,
+  sleeving text not null default 'none' check (sleeving in ('none', 'penny', 'colored'))
 );
 
 -- RLS is enabled with no policies: only requests using the service_role key
@@ -33,7 +34,8 @@ on conflict (id) do nothing;
 
 -- Priced aspects behind the order form's quote generator and the admin page's
 -- pricing editor. `base` always applies; the row whose id matches the order's
--- img_source_flag is added on top of it.
+-- img_source_flag is added on top of it, and the sleeve-* row matching their
+-- sleeving choice on top of that.
 create table public.pricing (
   id text primary key,
   label text not null,
@@ -54,5 +56,29 @@ insert into public.pricing (id, label, per_sheet, per_deck, is_minimum, sort_ord
   ('scryfall',      'Scryfall images',        0,     0, false, 1),
   ('custom-frames', 'Custom Frames',          0.75, 10, false, 2),
   ('custom-art',    'Full Custom',            6.75, 20, true,  3),
-  ('client',        'Client-provided images', 0,     0, false, 4)
+  ('client',        'Client-provided images', 0,     0, false, 4),
+  -- Sleeving is additive rather than an alternative, and is seeded as a
+  -- full-deck rate only: per-sheet sleeving stays unpriced until someone fills
+  -- those numbers in from the Pricing panel.
+  ('sleeve-penny',   'Penny Sleeves',         0,     1.25, false, 5),
+  ('sleeve-colored', 'Colored Sleeves',       0,     4,    false, 6)
 on conflict (id) do nothing;
+
+-- The fulfillment record, created once an order has been confirmed with the
+-- client. Separate from `orders` so the intake record stays as submitted: this
+-- table holds only what happens afterwards. order_id is the primary key, so
+-- confirming the same order twice is a conflict rather than a duplicate.
+create table public.confirmed_orders (
+  order_id uuid primary key references public.orders(id) on delete cascade,
+  confirmed_at timestamptz not null default now(),
+  -- Seeded from the order's price_quote, then edited by hand as needed.
+  confirmed_price numeric,
+  paid boolean not null default false,
+  printed boolean not null default false,
+  -- Forced true for unsleeved orders, which have no sleeving step to wait on.
+  cut_and_sleeved boolean not null default false,
+  delivered boolean not null default false
+);
+
+-- Same posture as the tables above: no policies, service_role only.
+alter table public.confirmed_orders enable row level security;

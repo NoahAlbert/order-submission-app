@@ -1,10 +1,14 @@
 import { createSupabaseClient, requireAdmin, json } from '../../_lib.js';
 
-// The full set of priced aspects. `base` applies to every order; the rest are
-// keyed by img_source_flag so a quote is always exactly base + one of them.
-// Fixed here rather than open-ended so a PUT can't invent rows the form's quote
-// would never look at.
-const PRICING_IDS = ['base', 'scryfall', 'custom-frames', 'custom-art', 'client'];
+// The full set of priced aspects. `base` applies to every order; the middle
+// group is keyed by img_source_flag and the sleeve-* rows by the sleeving
+// choice, so a quote is always exactly base + one of each. Fixed here rather
+// than open-ended so a PUT can't invent rows the form's quote would never look
+// at.
+const PRICING_IDS = [
+  'base', 'scryfall', 'custom-frames', 'custom-art', 'client',
+  'sleeve-penny', 'sleeve-colored',
+];
 
 // GET /api/pricing — public: the order form quotes from these before submitting.
 export async function onRequestGet(context) {

@@ -838,9 +838,19 @@
       <div id="lookup-results"></div>
     </div>
 
+    <div id="sleeving-section">
+      <label for="sleeving">Sleeving</label>
+      <div class="hint">How the finished cards arrive. Priced into the quote below.</div>
+      <select id="sleeving" name="sleeving">
+        <option value="none" selected>Unsleeved</option>
+        <option value="penny">Penny Sleeves</option>
+        <option value="colored">Colored Sleeves</option>
+      </select>
+    </div>
+
     <div id="quote-section">
       <label>Estimated Quote</label>
-      <div class="hint">Updates as you choose an order size and image source above.</div>
+      <div class="hint">Updates as you choose an order size, image source and sleeving above.</div>
       <div id="quote-box"></div>
     </div>
 
@@ -1239,12 +1249,22 @@
     updateOrderSizeVisibility();
 
     // ---- Quote ------------------------------------------------------------
-    // A quote is always the `base` row plus the one row matching the chosen
-    // image source, priced per sheet or as a flat full-deck rate. The admin page
-    // edits those rows; this only reads them.
+    // A quote is the `base` row, plus the one row matching the chosen image
+    // source, plus the one matching the sleeving choice — each priced per sheet
+    // or as a flat full-deck rate. The admin page edits those rows; this only
+    // reads them.
 
     const quoteBox = document.getElementById('quote-box');
     const orderCheckEl = document.getElementById('order-check');
+    const sleevingEl = document.getElementById('sleeving');
+
+    // Sleeving choice -> pricing row id. Unsleeved has no row: it is free by
+    // definition, so there is nothing for the admin page to edit.
+    const SLEEVING_PRICING_IDS = {
+      none: null,
+      penny: 'sleeve-penny',
+      colored: 'sleeve-colored',
+    };
 
     // Fallback for when /api/pricing can't be reached (page opened over file://,
     // API down, migration not yet run). These mirror the seeded rows, so the
@@ -1255,6 +1275,8 @@
       { id: 'custom-frames', label: 'Custom Frames', per_sheet: 0.75, per_deck: 10, is_minimum: false },
       { id: 'custom-art', label: 'Full Custom', per_sheet: 6.75, per_deck: 20, is_minimum: true },
       { id: 'client', label: 'Client-provided images', per_sheet: 0, per_deck: 0, is_minimum: false },
+      { id: 'sleeve-penny', label: 'Penny Sleeves', per_sheet: 0, per_deck: 1.25, is_minimum: false },
+      { id: 'sleeve-colored', label: 'Colored Sleeves', per_sheet: 0, per_deck: 4, is_minimum: false },
     ];
     let pricing = DEFAULT_PRICING;
 
@@ -1300,12 +1322,22 @@
       // A zero-rate source is priced, just at nothing extra — saying so beats
       // a "$0.00" line that reads like a bug, and beats hiding it entirely.
       const charged = rate(extra) > 0;
-      const total = amount(base) + amount(extra);
+
+      // Unsleeved has no pricing row, and sleeving is unpriced per sheet until
+      // someone fills those rates in — both land on the same "Included" line.
+      const sleeveRow = pricingFor(SLEEVING_PRICING_IDS[sleevingEl.value]);
+      const sleeveAmount = sleeveRow ? amount(sleeveRow) : 0;
+      const sleeveCharged = sleeveAmount > 0;
+      const sleeveLabel = sleevingEl.selectedOptions[0].textContent;
+
+      const total = amount(base) + amount(extra) + sleeveAmount;
 
       quoteBox.innerHTML =
         quoteLineHtml(base.label, detail(base), fmtMoney(amount(base)))
         + quoteLineHtml(extra.label, charged ? detail(extra) : 'no surcharge',
           charged ? fmtMoney(amount(extra)) : 'Included')
+        + quoteLineHtml(sleeveLabel, sleeveCharged ? detail(sleeveRow) : 'no surcharge',
+          sleeveCharged ? fmtMoney(sleeveAmount) : 'Included')
         + '<div class="quote-total"><span>Estimated total</span>'
         + '<span class="quote-amount">' + (extra.is_minimum ? 'from ' : '') + fmtMoney(total)
         + '</span></div>'
@@ -1322,6 +1354,7 @@
     orderSizeModeEl.addEventListener('change', renderQuote);
     orderSizeEl.addEventListener('input', renderQuote);
     imgSourceFlagEl.addEventListener('change', renderQuote);
+    sleevingEl.addEventListener('change', renderQuote);
     renderQuote();
 
     // Same reasoning as the quote's own listeners above: the image source is in
@@ -2177,6 +2210,7 @@
         cardFrameStyles: usable && usesFrameStyles(imgSourceFlag)
           ? lookupRows.map(effectiveFrameStyle).join('\n')
           : '',
+        sleeving: form.sleeving.value,
         customRequests: form.custom_requests.value,
         imgSourceFile: null,
       };

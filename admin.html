@@ -164,6 +164,33 @@
   #pricing-status { font-size: 0.85rem; }
   #pricing-status.ok { color: var(--success); }
   #pricing-status.err { color: var(--danger); }
+  /* Sleeving is added on top of a source row rather than being an alternative
+     to one, so it gets its own labelled block inside the same table. */
+  #pricing-table tr.group-head td {
+    background: var(--surface-2); color: var(--fg-muted);
+    font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* ---- Confirmed orders -------------------------------------------------
+     Everything after the price is agreed: the four fulfillment steps, tracked
+     independently, plus the confirmed price itself. */
+  #confirmed-panel { margin-top: 2.5rem; }
+  #confirmed-panel h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+  #confirmed-table td.flag, #confirmed-table th.flag { width: 5.5rem; text-align: center; }
+  #confirmed-table td.money { width: 8rem; }
+  #confirmed-table td.flag input[type="checkbox"] { margin: 0; }
+  /* A forced checkbox should read as settled rather than broken. */
+  input[type="checkbox"]:disabled { opacity: 0.55; cursor: not-allowed; }
+  td.confirm-cell { white-space: nowrap; }
+  /* Tonal rather than solid: confirming is a step forward, not the page's
+     primary action, and there is one of these on every row. */
+  button.confirm-btn {
+    background: var(--accent-bg); color: var(--accent); border-color: var(--border);
+    padding: 0.3rem 0.7rem; font-size: var(--text-sm);
+  }
+  button.confirm-btn:hover { border-color: var(--accent); }
+  .confirmed-tag { color: var(--success); font-size: var(--text-sm); white-space: nowrap; }
+  .empty-note { color: var(--fg-muted); font-size: 0.85rem; margin: var(--space-3) 0 0; }
 </style>
 </head>
 <body>
@@ -186,8 +213,8 @@
       <p class="hint">
         What the order form quotes before someone submits. <strong>Base printing</strong>
         applies to every order; the image-source row matching their choice is added
-        on top of it. <strong>Minimum</strong> marks that combination as a starting
-        price ("from $X") rather than a fixed one.
+        on top of it, and their sleeving choice on top of that. <strong>Minimum</strong>
+        marks a combination as a starting price ("from $X") rather than a fixed one.
       </p>
       <table id="pricing-table">
         <thead>
@@ -216,14 +243,45 @@
           <th>Status</th>
           <th>Size</th>
           <th>Image Source</th>
+          <th>Sleeving</th>
           <th>Cardlist</th>
           <th>Custom Requests</th>
           <th>Price Quote</th>
           <th>Paid</th>
+          <th>Confirm</th>
         </tr>
       </thead>
       <tbody id="orders-body"></tbody>
     </table>
+
+    <section id="confirmed-panel">
+      <h2>Confirmed orders</h2>
+      <p class="hint">
+        Orders whose price has been agreed with the client. The four steps are
+        tracked independently — tick them off as the job moves. An order printed
+        <strong>unsleeved</strong> has no sleeving step, so its
+        <strong>Cut and sleeved</strong> box is ticked and locked.
+      </p>
+      <table id="confirmed-table">
+        <thead>
+          <tr>
+            <th>Confirmed</th>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Sleeving</th>
+            <th>Confirmed price</th>
+            <th class="flag">Paid</th>
+            <th class="flag">Printed</th>
+            <th class="flag">Cut and sleeved</th>
+            <th class="flag">Delivered</th>
+          </tr>
+        </thead>
+        <tbody id="confirmed-body"></tbody>
+      </table>
+      <p class="empty-note" id="confirmed-empty" hidden>
+        Nothing confirmed yet — use the Confirm button on an order above.
+      </p>
+    </section>
   </div>
 
   <script>
@@ -264,7 +322,25 @@
     const savePricingBtn = document.getElementById('save-pricing-btn');
     const pricingStatus = document.getElementById('pricing-status');
 
+    const confirmedBody = document.getElementById('confirmed-body');
+    const confirmedEmpty = document.getElementById('confirmed-empty');
+
     const STATUSES = ['new', 'wip', 'complete', 'delivered'];
+
+    // How the order form's stored sleeving value reads in a table.
+    const SLEEVING_LABELS = {
+      none: 'Unsleeved',
+      penny: 'Penny Sleeves',
+      colored: 'Colored Sleeves',
+    };
+
+    // The pricing rows that are added to a quote rather than chosen between.
+    const SLEEVING_PRICING_IDS = ['sleeve-penny', 'sleeve-colored'];
+
+    // order ids that already have a confirmed record, so the orders table can
+    // show a label instead of a second Confirm button. Filled by
+    // loadConfirmedOrders(), which runs first.
+    let confirmedIds = new Set();
 
     function getToken() {
       return sessionStorage.getItem('admin_password') || '';
@@ -326,21 +402,22 @@
           if (s === order.status) opt.selected = true;
           statusSelect.appendChild(opt);
         }
-        statusSelect.addEventListener('change', () => saveField(tr, order.id, { status: statusSelect.value }));
+        const orderPath = `/api/orders/${order.id}`;
+        statusSelect.addEventListener('change', () => saveField(tr, orderPath, { status: statusSelect.value }));
 
         const priceInput = document.createElement('input');
         priceInput.type = 'number';
         priceInput.step = '0.01';
         priceInput.value = order.price_quote ?? '';
         priceInput.placeholder = '—';
-        priceInput.addEventListener('change', () => saveField(tr, order.id, {
+        priceInput.addEventListener('change', () => saveField(tr, orderPath, {
           price_quote: priceInput.value === '' ? null : Number(priceInput.value),
         }));
 
         const paidCheckbox = document.createElement('input');
         paidCheckbox.type = 'checkbox';
         paidCheckbox.checked = !!order.paid;
-        paidCheckbox.addEventListener('change', () => saveField(tr, order.id, { paid: paidCheckbox.checked }));
+        paidCheckbox.addEventListener('change', () => saveField(tr, orderPath, { paid: paidCheckbox.checked }));
 
         tr.innerHTML = `
           <td>${fmtDate(order.created_at)}</td>
@@ -348,14 +425,17 @@
           <td class="status-cell"></td>
           <td>${order.order_size}</td>
           <td class="img-cell">${escapeHtml(order.img_source_flag)}</td>
+          <td>${escapeHtml(sleevingLabel(order.sleeving))}</td>
           <td class="wrap"><div class="cell-scroll">${escapeHtml(order.cardlist)}</div></td>
           <td class="wrap">${escapeHtml(order.custom_requests || '')}</td>
           <td class="price-cell"></td>
           <td class="paid-cell"></td>
+          <td class="confirm-cell"></td>
         `;
         tr.querySelector('.status-cell').appendChild(statusSelect);
         tr.querySelector('.price-cell').appendChild(priceInput);
         tr.querySelector('.paid-cell').appendChild(paidCheckbox);
+        tr.querySelector('.confirm-cell').appendChild(confirmControl(order));
 
         if (order.img_source) {
           const imgCell = tr.querySelector('.img-cell');
@@ -379,10 +459,12 @@
       return div.innerHTML;
     }
 
-    async function saveField(row, id, patch) {
+    // `path` rather than an order id: the confirmed table saves the same way,
+    // just to a different endpoint.
+    async function saveField(row, path, patch) {
       row.classList.add('row-saving');
       try {
-        await api(`/api/orders/${id}`, {
+        await api(path, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
@@ -397,6 +479,126 @@
     async function loadOrders() {
       const orders = await api('/api/orders');
       renderOrders(orders);
+    }
+
+    // ---- Confirmed orders --------------------------------------------------
+    // What happens after the price is agreed. Each order is promoted once; the
+    // four steps then move independently, so they are four booleans rather than
+    // one status dropdown.
+
+    function sleevingLabel(value) {
+      return SLEEVING_LABELS[value] || SLEEVING_LABELS.none;
+    }
+
+    // Either the button that promotes an order, or the note saying it already
+    // happened — never both, and never a second record.
+    function confirmControl(order) {
+      if (confirmedIds.has(order.id)) {
+        const tag = document.createElement('span');
+        tag.className = 'confirmed-tag';
+        tag.textContent = '✓ Confirmed';
+        return tag;
+      }
+      const btn = document.createElement('button');
+      btn.className = 'confirm-btn';
+      btn.textContent = 'Confirm';
+      btn.addEventListener('click', () => confirmOrder(order, btn));
+      return btn;
+    }
+
+    async function confirmOrder(order, btn) {
+      btn.disabled = true;
+      try {
+        await api('/api/confirmed-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: order.id }),
+        });
+      } catch (err) {
+        // On 401 the login panel is already up; anything else is worth saying.
+        if (err.message !== 'Unauthorized') {
+          alert('Could not confirm that order: ' + err.message);
+        }
+        return;
+      } finally {
+        btn.disabled = false;
+      }
+      // Both tables: the new row appears below, and the button above becomes a
+      // label.
+      try {
+        await loadConfirmedOrders();
+        await loadOrders();
+      } catch (err) {
+        // Already surfaced by api() — the order itself was confirmed.
+      }
+    }
+
+    // field -> the cell it lives in, in table order.
+    const CONFIRMED_FLAGS = [
+      ['paid', '.paid-cell'],
+      ['printed', '.printed-cell'],
+      ['cut_and_sleeved', '.sleeved-cell'],
+      ['delivered', '.delivered-cell'],
+    ];
+
+    function renderConfirmed(rows) {
+      confirmedBody.innerHTML = '';
+      confirmedEmpty.hidden = rows.length > 0;
+
+      for (const row of rows) {
+        const order = row.orders || {};
+        const tr = document.createElement('tr');
+        tr.dataset.id = row.order_id;
+        const path = `/api/confirmed-orders/${row.order_id}`;
+
+        const priceInput = document.createElement('input');
+        priceInput.type = 'number';
+        priceInput.step = '0.01';
+        priceInput.value = row.confirmed_price ?? '';
+        priceInput.placeholder = '—';
+        priceInput.addEventListener('change', () => saveField(tr, path, {
+          confirmed_price: priceInput.value === '' ? null : Number(priceInput.value),
+        }));
+
+        tr.innerHTML = `
+          <td>${fmtDate(row.confirmed_at)}</td>
+          <td>${escapeHtml(order.name || '')}</td>
+          <td>${order.order_size ?? ''}</td>
+          <td>${escapeHtml(sleevingLabel(order.sleeving))}</td>
+          <td class="money price-cell"></td>
+          <td class="flag paid-cell"></td>
+          <td class="flag printed-cell"></td>
+          <td class="flag sleeved-cell"></td>
+          <td class="flag delivered-cell"></td>
+        `;
+        tr.querySelector('.price-cell').appendChild(priceInput);
+
+        for (const [field, selector] of CONFIRMED_FLAGS) {
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.checked = !!row[field];
+
+          // An unsleeved order has no sleeving step waiting on it, so this one
+          // is done from the moment it is confirmed. No listener: there is
+          // nothing to save, and the API refuses to unset it anyway.
+          if (field === 'cut_and_sleeved' && order.sleeving === 'none') {
+            box.checked = true;
+            box.disabled = true;
+            box.title = 'Submitted unsleeved — there is no sleeving step for this order.';
+          } else {
+            box.addEventListener('change', () => saveField(tr, path, { [field]: box.checked }));
+          }
+          tr.querySelector(selector).appendChild(box);
+        }
+
+        confirmedBody.appendChild(tr);
+      }
+    }
+
+    async function loadConfirmedOrders() {
+      const rows = await api('/api/confirmed-orders');
+      confirmedIds = new Set(rows.map((row) => row.order_id));
+      renderConfirmed(rows);
     }
 
     // ---- Pricing ---------------------------------------------------------
@@ -429,10 +631,18 @@
       const baseSheet = Number(baseRow.querySelector('.per-sheet').value) || 0;
       const baseDeck = Number(baseRow.querySelector('.per-deck').value) || 0;
 
-      for (const tr of pricingBody.querySelectorAll('tr')) {
+      for (const tr of pricingBody.querySelectorAll('tr[data-id]')) {
         const cell = tr.querySelector('.total');
         if (tr.dataset.id === 'base') {
           cell.textContent = 'applies to every order';
+          continue;
+        }
+        // Sleeving is added to a quote rather than chosen instead of a source,
+        // so summing it with base would describe an order nobody can place.
+        if (SLEEVING_PRICING_IDS.includes(tr.dataset.id)) {
+          const perSheet = Number(tr.querySelector('.per-sheet').value) || 0;
+          const perDeck = Number(tr.querySelector('.per-deck').value) || 0;
+          cell.textContent = `adds ${fmtMoney(perSheet)}/sheet · ${fmtMoney(perDeck)}/deck`;
           continue;
         }
         const sheet = baseSheet + (Number(tr.querySelector('.per-sheet').value) || 0);
@@ -444,7 +654,19 @@
 
     function renderPricing(rows) {
       pricingBody.innerHTML = '';
+      let sleevingHeaderDone = false;
+
       for (const row of rows) {
+        // One heading in front of the sleeving block, since those rows are read
+        // differently from the ones above them.
+        if (SLEEVING_PRICING_IDS.includes(row.id) && !sleevingHeaderDone) {
+          const head = document.createElement('tr');
+          head.className = 'group-head';
+          head.innerHTML = '<td colspan="5">Sleeving — added on top of the rows above</td>';
+          pricingBody.appendChild(head);
+          sleevingHeaderDone = true;
+        }
+
         const tr = document.createElement('tr');
         tr.dataset.id = row.id;
 
@@ -459,8 +681,9 @@
         minimum.checked = !!row.is_minimum;
         minimum.addEventListener('change', refreshPricingTotals);
         // The base row is never a quote on its own, so "minimum" has nothing to
-        // qualify there — every quote pairs it with an image-source row.
-        minimum.disabled = row.id === 'base';
+        // qualify there — every quote pairs it with an image-source row. A flat
+        // sleeving fee has no "from" reading either.
+        minimum.disabled = row.id === 'base' || SLEEVING_PRICING_IDS.includes(row.id);
 
         tr.innerHTML = `
           <td>${escapeHtml(row.label)}</td>
@@ -482,7 +705,7 @@
     }
 
     savePricingBtn.addEventListener('click', async () => {
-      const payload = [...pricingBody.querySelectorAll('tr')].map((tr) => ({
+      const payload = [...pricingBody.querySelectorAll('tr[data-id]')].map((tr) => ({
         id: tr.dataset.id,
         per_sheet: Number(tr.querySelector('.per-sheet').value) || 0,
         per_deck: Number(tr.querySelector('.per-deck').value) || 0,
@@ -509,9 +732,12 @@
     });
 
     async function loadDashboard() {
-      // Pricing first: it is the smaller request, and a failure on either one
-      // should leave the login panel up rather than a half-drawn dashboard.
+      // Pricing first: it is the smaller request, and a failure on any one of
+      // these should leave the login panel up rather than a half-drawn
+      // dashboard. Confirmed orders before the orders table, which reads the
+      // set of confirmed ids to decide between a button and a label.
       await loadPricing();
+      await loadConfirmedOrders();
       await loadOrders();
       showDashboard();
     }
