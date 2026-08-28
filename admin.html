@@ -5,60 +5,170 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Orders Admin</title>
 <style>
+  /* ---- Tokens ---------------------------------------------------------
+     Same set, same names, and the same localStorage key as index.html, so a
+     theme chosen on the order form carries over here and back. Dark is the
+     base so the page paints dark before any JS runs. */
+  :root {
+    color-scheme: dark;
+
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+
+    --radius-sm: 4px;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --radius-pill: 999px;
+
+    --text-xs: 0.75rem;
+    --text-sm: 0.8125rem;
+    --text-md: 0.9rem;
+
+    --transition: 140ms ease;
+
+    --bg: #14161a;
+    --surface: #1c1f26;
+    --surface-2: #22262f;
+    --fg: #e8eaed;
+    --fg-muted: #a8adb8;
+    --fg-faint: #7d838f;
+    --border: #333842;
+    --border-strong: #4d545f;
+
+    --btn-bg: #e8eaed;
+    --btn-fg: #14161a;
+
+    --accent: #7aa2e8;
+    --accent-bg: #23304a;
+    --accent-ring: rgba(122, 162, 232, 0.3);
+
+    --success: #5ec97f;
+    --danger: #f0847a;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #eceff3;
+    --fg: #1a1a1a;
+    --fg-muted: #555c66;
+    --fg-faint: #767c86;
+    --border: #d7dbe1;
+    --border-strong: #a3abb6;
+
+    --btn-bg: #1a1a1a;
+    --btn-fg: #ffffff;
+
+    --accent: #3a5a9a;
+    --accent-bg: #e5ebf7;
+    --accent-ring: rgba(58, 90, 154, 0.22);
+
+    --success: #1a7f37;
+    --danger: #c0392b;
+
+    --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  }
+
   body {
     font-family: system-ui, -apple-system, sans-serif;
-    margin: 2rem;
-    color: #1a1a1a;
+    margin: var(--space-6);
+    color: var(--fg);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.4rem; margin-bottom: var(--space-4); }
   #login-panel { max-width: 320px; margin: 4rem auto; }
   #login-panel input {
-    width: 100%; padding: 0.6rem; margin-bottom: 0.75rem;
-    border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; box-sizing: border-box;
+    width: 100%; padding: 0.6rem; margin-bottom: var(--space-3);
+    border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; box-sizing: border-box;
+    background: var(--surface); color: var(--fg); font-family: inherit;
   }
-  #login-panel button, .save-hint { font-size: 0.9rem; }
+  #login-panel button, .save-hint { font-size: var(--text-md); }
   button {
-    background: #1a1a1a; color: white; border: none;
-    padding: 0.55rem 1.1rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer;
+    background: var(--btn-bg); color: var(--btn-fg); border: 1px solid transparent;
+    padding: 0.55rem 1.1rem; border-radius: 6px; font-size: var(--text-md); cursor: pointer;
+    font-family: inherit;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
   button:disabled { opacity: 0.6; cursor: default; }
-  #error { color: #c0392b; font-size: 0.9rem; margin-top: 0.5rem; }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
+  #error { color: var(--danger); font-size: var(--text-md); margin-top: var(--space-2); }
   table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-  th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; vertical-align: top; }
-  th { background: #f5f5f5; position: sticky; top: 0; }
+  th, td { border: 1px solid var(--border); padding: var(--space-2); text-align: left; vertical-align: top; }
+  /* Opaque on purpose: the header is sticky, so a transparent one would show
+     order rows scrolling underneath it. */
+  th { background: var(--surface-2); position: sticky; top: 0; }
   td.wrap { max-width: 220px; white-space: pre-wrap; word-break: break-word; }
   /* Card lists are one line per physical card now, so a full deck is 104 lines.
      max-height is ignored on a table-cell, hence the inner div: without it a
      single order stretches its whole row off the screen. */
   td.wrap .cell-scroll { max-height: 12rem; overflow-y: auto; }
   select, input[type="number"] {
-    padding: 0.3rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; width: 100%; box-sizing: border-box;
+    padding: 0.3rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 0.85rem; width: 100%; box-sizing: border-box;
+    background: var(--surface); color: var(--fg); font-family: inherit;
   }
+  input[type="checkbox"] { accent-color: var(--accent); }
   .row-saving { opacity: 0.5; }
-  #toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-  #toolbar button { background: #666; }
-  a.file-link { font-size: 0.85rem; }
+  /* padding-right keeps Log out clear of the fixed theme toggle overhead. */
+  #toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: var(--space-4); padding-right: 6rem;
+  }
+  /* Ghost weight — logging out is not the action anyone came here for. */
+  #toolbar button {
+    background: none; border-color: var(--border); color: var(--fg-muted); font-weight: 500;
+  }
+  #toolbar button:hover { background: var(--surface-2); border-color: var(--border-strong); color: var(--fg); }
+  a.file-link { font-size: 0.85rem; color: var(--accent); }
+
+  /* Fixed rather than placed in the toolbar: the login panel and the dashboard
+     are separate views, and one button serves both without being duplicated. */
+  #theme-toggle {
+    position: fixed;
+    top: var(--space-4);
+    right: var(--space-4);
+    z-index: 10;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    color: var(--fg-muted);
+    padding: 0.35rem 0.8rem;
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+  #theme-toggle:hover { background: var(--surface-2); border-color: var(--border-strong); color: var(--fg); }
 
   /* ---- Pricing editor ---------------------------------------------------
      Sits above the orders table because it is settings, not data: read it
      once, then scroll past it to the orders you actually came for. */
   #pricing-panel { margin-bottom: 2.5rem; }
   #pricing-panel h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
-  .hint { color: #666; font-size: 0.85rem; margin: 0 0 0.75rem; max-width: 62ch; }
+  .hint { color: var(--fg-muted); font-size: 0.85rem; margin: 0 0 var(--space-3); max-width: 62ch; }
   #pricing-table { max-width: 720px; }
   #pricing-table td.money { width: 7.5rem; }
   #pricing-table td.flag { width: 5rem; text-align: center; }
   #pricing-table input[type="checkbox"] { margin: 0; }
-  td.total { color: #666; font-size: 0.85rem; white-space: nowrap; }
-  .money-cell { display: flex; align-items: center; gap: 0.25rem; }
-  .money-cell span { color: #666; }
-  #pricing-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+  td.total { color: var(--fg-muted); font-size: 0.85rem; white-space: nowrap; }
+  .money-cell { display: flex; align-items: center; gap: var(--space-1); }
+  .money-cell span { color: var(--fg-muted); }
+  #pricing-actions { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); }
   #pricing-status { font-size: 0.85rem; }
-  #pricing-status.ok { color: #1a7f37; }
-  #pricing-status.err { color: #c0392b; }
+  #pricing-status.ok { color: var(--success); }
+  #pricing-status.err { color: var(--danger); }
 </style>
 </head>
 <body>
+  <button type="button" id="theme-toggle">☀ Light</button>
+
   <div id="login-panel">
     <h1>Orders Admin</h1>
     <input type="password" id="password" placeholder="Admin password" autofocus>
@@ -102,7 +212,7 @@
       <thead>
         <tr>
           <th>Created</th>
-          <th>Name / Email</th>
+          <th>Name</th>
           <th>Status</th>
           <th>Size</th>
           <th>Image Source</th>
@@ -117,6 +227,32 @@
   </div>
 
   <script>
+    // Dark is the default; :root already paints it, so this only has to handle
+    // a stored preference and the toggle. The key is shared with index.html, so
+    // the choice carries between the order form and this page. localStorage
+    // throws in some privacy modes, so every access is guarded.
+    const THEME_KEY = 'mtgprint-theme';
+    const themeToggle = document.getElementById('theme-toggle');
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      themeToggle.textContent = theme === 'dark' ? '☀ Light' : '☾ Dark';
+      themeToggle.setAttribute(
+        'aria-label',
+        theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+      );
+    }
+
+    let storedTheme = null;
+    try { storedTheme = localStorage.getItem(THEME_KEY); } catch (err) { /* unavailable */ }
+    applyTheme(storedTheme === 'light' ? 'light' : 'dark');
+
+    themeToggle.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (err) { /* unavailable */ }
+    });
+
     const loginPanel = document.getElementById('login-panel');
     const dashboard = document.getElementById('dashboard');
     const passwordInput = document.getElementById('password');
@@ -208,7 +344,7 @@
 
         tr.innerHTML = `
           <td>${fmtDate(order.created_at)}</td>
-          <td>${escapeHtml(order.name)}<br><span style="color:#666">${escapeHtml(order.email || '')}</span></td>
+          <td>${escapeHtml(order.name)}</td>
           <td class="status-cell"></td>
           <td>${order.order_size}</td>
           <td class="img-cell">${escapeHtml(order.img_source_flag)}</td>
