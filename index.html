@@ -347,6 +347,10 @@
   }
   .quote-fineprint { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--fg-faint); }
 
+  /* Below Submit, so it reads as a trailing afterthought rather than a step
+     the client skipped on the way to the button. */
+  #custom-requests-section { margin-top: var(--space-6); }
+
   #status { margin-top: var(--space-3); font-size: var(--text-md); }
   #status.success, #status.error {
     padding: 0.6rem 0.8rem;
@@ -359,6 +363,24 @@
   /* ---- Frame style picker ----------------------------------------------
      These renders carry a black bleed border, so their true ratio is 640/871
      (0.735), not a bare card's 63/88 (0.716). Using the card ratio would crop them. */
+  /* Collapsible so the picker's ~700px stops dominating the form once a style
+     is chosen; the summary keeps the choice readable while closed. The section
+     carries its own margin because the picker's is inside the collapsed part. */
+  #frame-style-section { margin-bottom: var(--space-3); }
+  #frame-style-summary {
+    font-weight: 600;
+    font-size: var(--text-md);
+    cursor: pointer;
+    margin-bottom: var(--space-1);
+    width: fit-content;
+  }
+  #frame-style-summary-value { font-weight: 400; color: var(--fg-muted); }
+  #frame-style-summary:focus-visible {
+    outline: none;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+
   #frame-style-picker {
     display: grid;
     grid-template-columns: 1fr 480px;
@@ -366,6 +388,28 @@
     align-items: start;
     margin-bottom: var(--space-3);
   }
+  /* Spans the whole thumb grid so lands read as a separate kind of choice
+     rather than five more frames on the end of the list. */
+  .frame-group-label {
+    grid-column: 1 / -1;
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    color: var(--fg-faint);
+    padding-top: var(--space-2);
+  }
+  .frame-group-label:first-child { padding-top: 0; }
+
+  #frame-preview-warning, #frame-land-warning {
+    color: var(--warn);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2);
+  }
+  #frame-preview-warning { margin-top: var(--space-2); font-size: var(--text-xs); }
+  #frame-land-warning { margin-bottom: var(--space-3); font-size: var(--text-sm); }
   #frame-style-thumbs {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -726,15 +770,25 @@
     </div>
 
     <div id="frame-style-section" hidden>
-      <label>Frame Style</label>
-      <div class="hint">Applies to every card in this order. Hover to preview, click to choose.</div>
-      <div id="frame-style-picker">
-        <div id="frame-style-thumbs"></div>
-        <figure id="frame-style-preview">
-          <img id="frame-preview-img" alt="">
-          <figcaption id="frame-preview-label">Hover a style to preview it</figcaption>
-        </figure>
-      </div>
+      <details id="frame-style-details" open>
+        <summary id="frame-style-summary">
+          Frame Style — <span id="frame-style-summary-value">none chosen</span>
+        </summary>
+        <div class="hint">Applies to every card in this order. Hover to preview, click to choose.</div>
+        <div id="frame-style-picker">
+          <div id="frame-style-thumbs"></div>
+          <figure id="frame-style-preview">
+            <img id="frame-preview-img" alt="">
+            <figcaption id="frame-preview-label">Hover a style to preview it</figcaption>
+            <div id="frame-preview-warning" hidden></div>
+          </figure>
+        </div>
+        <div id="frame-land-warning" hidden>
+          <strong>Basic land styles only apply to basic lands.</strong> As your order
+          default this style is applied to every card. Pick a card frame as the default,
+          then set a land style on individual cards from the printing picker.
+        </div>
+      </details>
       <input type="hidden" id="frame_style" name="frame_style">
     </div>
 
@@ -742,7 +796,7 @@
       <legend>Image Files (only needed if you're providing your own)</legend>
       <div id="filename-note" hidden>
         <strong>Name each image file after its card</strong> — <code>Lightning Bolt.png</code>,
-        <code>Sol Ring.jpg</code>. That's how we match your art to the card list below.
+        <code>Sol Ring.jpg</code>. That's how I match your art to the card list below.
         If a card needs more than one different art, number them:
         <code>Lightning Bolt 2.png</code>.
       </div>
@@ -764,10 +818,6 @@
       <div id="lookup-results"></div>
     </div>
 
-    <label for="custom_requests">Custom Requests / Notes</label>
-    <div class="hint">Optional. Anything else we should know about this order.</div>
-    <textarea id="custom_requests" name="custom_requests"></textarea>
-
     <div id="quote-section">
       <label>Estimated Quote</label>
       <div class="hint">Updates as you choose an order size and image source above.</div>
@@ -776,6 +826,12 @@
 
     <button type="submit">Submit Order</button>
     <div id="status"></div>
+
+    <div id="custom-requests-section">
+      <label for="custom_requests">Custom Requests / Notes</label>
+      <div class="hint">Optional. Anything else I should know about this order.</div>
+      <textarea id="custom_requests" name="custom_requests"></textarea>
+    </div>
   </form>
 
   <script>
@@ -794,16 +850,43 @@
     }
 
     // Hardcoded because there is no build step and file:// cannot list a directory.
-    // The slug is both the submitted value and the image filename (img/<slug>.jpg).
+    // The slug is both the submitted value and the image filename — img/<slug>.jpg
+    // for card frames, img/Land/<slug>.jpg for the land treatments.
+    //   land:       basic-land art, so it only makes sense on basic lands (see B2 warning)
+    //   artWarning: extended/full-art crops, where source scans upscale poorly
     const FRAME_STYLES = [
-      ['normal', 'Normal'], ['classic', 'Classic'], ['classic-token', 'Classic Token'],
-      ['extended', 'Extended Art'], ['borderless-vector', 'Borderless Vector'],
-      ['colorshifted', 'Colorshifted'], ['crimson-fang', 'Crimson Fang'],
-      ['double-feature', 'Double Feature'], ['etched', 'Etched'], ['expedition', 'Expedition'],
-      ['kaldheim', 'Kaldheim'], ['masterpiece', 'Masterpiece'], ['neon', 'Neon'],
-      ['ninja', 'Ninja'], ['phyrexian', 'Phyrexian'], ['ring', 'Ring'], ['sketch', 'Sketch'],
-      ['snow', 'Snow'], ['stained-glass', 'Stained Glass'], ['stargazing', 'Stargazing'],
+      { slug: 'normal', label: 'Normal' },
+      { slug: 'classic', label: 'Classic' },
+      { slug: 'classic-token', label: 'Classic Token', artWarning: true },
+      { slug: 'extended', label: 'Extended Art', artWarning: true },
+      { slug: 'borderless-vector', label: 'Borderless Vector', artWarning: true },
+      { slug: 'colorshifted', label: 'Colorshifted' },
+      { slug: 'crimson-fang', label: 'Crimson Fang' },
+      { slug: 'double-feature', label: 'Double Feature' },
+      { slug: 'etched', label: 'Etched' },
+      { slug: 'expedition', label: 'Expedition' },
+      { slug: 'kaldheim', label: 'Kaldheim' },
+      { slug: 'masterpiece', label: 'Masterpiece' },
+      { slug: 'neon', label: 'Neon' },
+      { slug: 'ninja', label: 'Ninja', artWarning: true },
+      { slug: 'phyrexian', label: 'Phyrexian' },
+      { slug: 'ring', label: 'Ring' },
+      { slug: 'sketch', label: 'Sketch' },
+      { slug: 'snow', label: 'Snow' },
+      { slug: 'stained-glass', label: 'Stained Glass' },
+      { slug: 'stargazing', label: 'Stargazing', artWarning: true },
+      { slug: 'signature-basic', label: 'Signature', land: true },
+      { slug: 'theros-basic', label: 'Theros', land: true },
+      { slug: 'theros-classic-basic', label: 'Theros Classic', land: true },
+      { slug: 'ukiyo-e-basic', label: 'Ukiyo-e', land: true },
+      { slug: 'unstable-basic', label: 'Unstable', land: true },
     ];
+
+    const CARD_FRAME_STYLES = FRAME_STYLES.filter((style) => !style.land);
+    const LAND_FRAME_STYLES = FRAME_STYLES.filter((style) => style.land);
+
+    const ART_WARNING_TEXT =
+      'Art quality may appear worse when selecting extended or full art styles.';
 
     // Dark is the default; :root already paints it, so this only has to handle
     // a stored preference and the toggle. localStorage throws in some privacy
@@ -849,6 +932,9 @@
     const frameThumbsEl = document.getElementById('frame-style-thumbs');
     const framePreviewImg = document.getElementById('frame-preview-img');
     const framePreviewLabel = document.getElementById('frame-preview-label');
+    const framePreviewWarning = document.getElementById('frame-preview-warning');
+    const frameLandWarning = document.getElementById('frame-land-warning');
+    const frameSummaryValue = document.getElementById('frame-style-summary-value');
     const frameStyleInput = document.getElementById('frame_style');
 
     let lookupRows = null;
@@ -856,8 +942,19 @@
     let framesBuilt = false;
     const printingsCache = new Map();
 
-    function frameImagePath(slug) {
-      return 'img/' + slug + '.jpg';
+    function frameStyleBySlug(slug) {
+      return FRAME_STYLES.find((style) => style.slug === slug) || null;
+    }
+
+    function frameImagePath(style) {
+      return (style.land ? 'img/Land/' : 'img/') + style.slug + '.jpg';
+    }
+
+    function frameThumbHtml(style) {
+      return '<button type="button" class="frame-thumb" data-style="' + escapeHtml(style.slug) + '">' +
+        '<img src="' + escapeHtml(frameImagePath(style)) + '" alt="" loading="lazy">' +
+        '<span class="frame-thumb-label">' + escapeHtml(style.label) + '</span>' +
+      '</button>';
     }
 
     // img/ is ~11.7MB, so the thumbnails are only built the first time Custom
@@ -865,17 +962,16 @@
     function ensureFrameThumbs() {
       if (framesBuilt) return;
       framesBuilt = true;
-      frameThumbsEl.innerHTML = FRAME_STYLES.map(([slug, label]) => (
-        '<button type="button" class="frame-thumb" data-style="' + escapeHtml(slug) + '">' +
-          '<img src="' + escapeHtml(frameImagePath(slug)) + '" alt="" loading="lazy">' +
-          '<span class="frame-thumb-label">' + escapeHtml(label) + '</span>' +
-        '</button>'
-      )).join('');
+      frameThumbsEl.innerHTML =
+        '<div class="frame-group-label">Card Frames</div>' +
+        CARD_FRAME_STYLES.map(frameThumbHtml).join('') +
+        '<div class="frame-group-label">Basic Lands</div>' +
+        LAND_FRAME_STYLES.map(frameThumbHtml).join('');
     }
 
     function frameStyleLabel(slug) {
-      const entry = FRAME_STYLES.find(([value]) => value === slug);
-      return entry ? entry[1] : slug;
+      const style = frameStyleBySlug(slug);
+      return style ? style.label : slug;
     }
 
     // The order-level style is a default; a row only overrides it when set.
@@ -887,49 +983,68 @@
       return Boolean(row.frameStyle) && row.frameStyle !== frameStyleInput.value;
     }
 
-    function showFramePreview(slug, label) {
-      framePreviewImg.src = frameImagePath(slug);
-      framePreviewLabel.textContent = label;
+    // The caveat rides the preview rather than the thumbnail so it shows on hover
+    // too — before the click is when it can still change the client's mind.
+    function showFramePreview(style) {
+      framePreviewImg.src = frameImagePath(style);
+      framePreviewLabel.textContent = style.label;
+      framePreviewWarning.textContent = style.artWarning ? ART_WARNING_TEXT : '';
+      framePreviewWarning.hidden = !style.artWarning;
     }
 
     // Reverts a transient hover preview back to whatever is actually selected.
     function restoreFramePreview() {
-      const selected = FRAME_STYLES.find(([slug]) => slug === frameStyleInput.value);
+      const selected = frameStyleBySlug(frameStyleInput.value);
       if (selected) {
-        showFramePreview(selected[0], selected[1]);
+        showFramePreview(selected);
       } else {
         framePreviewImg.removeAttribute('src');
         framePreviewLabel.textContent = 'Hover a style to preview it';
+        framePreviewWarning.hidden = true;
       }
     }
 
     function frameStyleFor(el) {
       const btn = el && el.closest ? el.closest('.frame-thumb') : null;
       if (!btn) return null;
-      const slug = btn.dataset.style;
-      const entry = FRAME_STYLES.find(([value]) => value === slug);
-      return entry ? { btn, slug: entry[0], label: entry[1] } : null;
+      const style = frameStyleBySlug(btn.dataset.style);
+      return style ? { btn, style } : null;
+    }
+
+    // Only a warning about the order *default*: a land style chosen on an
+    // individual card in the printing picker is exactly what it is for.
+    function refreshLandWarning() {
+      const selected = frameStyleBySlug(frameStyleInput.value);
+      frameLandWarning.hidden = !(selected && selected.land);
+    }
+
+    function updateFrameSummary() {
+      frameSummaryValue.textContent = frameStyleInput.value
+        ? frameStyleLabel(frameStyleInput.value)
+        : 'none chosen';
     }
 
     // mouseover and focusin both preview, so the picker works by pointer or keyboard.
     frameThumbsEl.addEventListener('mouseover', (e) => {
       const hit = frameStyleFor(e.target);
-      if (hit) showFramePreview(hit.slug, hit.label);
+      if (hit) showFramePreview(hit.style);
     });
     frameThumbsEl.addEventListener('focusin', (e) => {
       const hit = frameStyleFor(e.target);
-      if (hit) showFramePreview(hit.slug, hit.label);
+      if (hit) showFramePreview(hit.style);
     });
     frameThumbsEl.addEventListener('mouseleave', restoreFramePreview);
 
     frameThumbsEl.addEventListener('click', (e) => {
       const hit = frameStyleFor(e.target);
       if (!hit) return;
-      frameStyleInput.value = hit.slug;
+      frameStyleInput.value = hit.style.slug;
       frameThumbsEl.querySelectorAll('.frame-thumb.selected')
         .forEach((el) => el.classList.remove('selected'));
       hit.btn.classList.add('selected');
-      showFramePreview(hit.slug, hit.label);
+      showFramePreview(hit.style);
+      updateFrameSummary();
+      refreshLandWarning();
       // Overrides survive a default change, so re-render to re-evaluate which
       // cards still count as deviating from the new default.
       if (lookupRows) renderResults();
@@ -1066,9 +1181,9 @@
         + (extra.is_minimum
           ? '<div class="quote-note">' + escapeHtml(extra.label)
             + ' is quoted from this minimum — the final price depends on the artwork and how'
-            + ' much work each card takes. We confirm your exact quote before anything is printed.</div>'
+            + ' much work each card takes. I confirm your exact quote before anything is printed.</div>'
           : '<div class="quote-fineprint">An estimate, not an invoice —'
-            + ' we confirm the final quote before printing.</div>');
+            + ' I confirm the final quote before printing.</div>');
     }
 
     // Own listeners rather than hooking the visibility handlers above: those run
@@ -1500,12 +1615,13 @@
       const defaultLabel = frameStyleInput.value
         ? frameStyleLabel(frameStyleInput.value)
         : 'none chosen yet';
-      const options = ['<option value="">Use order default (' + escapeHtml(defaultLabel) + ')</option>']
-        .concat(FRAME_STYLES.map(([slug, label]) => (
-          '<option value="' + escapeHtml(slug) + '"' +
-            (row.frameStyle === slug ? ' selected' : '') + '>' + escapeHtml(label) + '</option>'
-        )))
-        .join('');
+      const optionsFor = (styles) => styles.map((style) => (
+        '<option value="' + escapeHtml(style.slug) + '"' +
+          (row.frameStyle === style.slug ? ' selected' : '') + '>' + escapeHtml(style.label) + '</option>'
+      )).join('');
+      const options = '<option value="">Use order default (' + escapeHtml(defaultLabel) + ')</option>' +
+        '<optgroup label="Card Frames">' + optionsFor(CARD_FRAME_STYLES) + '</optgroup>' +
+        '<optgroup label="Basic Lands">' + optionsFor(LAND_FRAME_STYLES) + '</optgroup>';
       return '<div class="panel-section">' +
         '<div class="panel-section-title">Frame Style</div>' +
         '<select class="frame-select">' + options + '</select>' +
@@ -1744,7 +1860,7 @@
 
       if (SOURCES_REQUIRING_LOOKUP.includes(imgSourceFlag) && !lookupIsUsable()) {
         status.textContent = !lookupRows || lookupStale
-          ? 'Please run "Look Up Cards" so we know which printing you want for each card.'
+          ? 'Please run "Look Up Cards" so I know which printing you want for each card.'
           : 'Some cards could not be found. Fix them in the card list above before submitting.';
         status.className = 'error';
         return;
@@ -1792,10 +1908,16 @@
         status.textContent = 'Thanks! Your order was submitted.';
         status.className = 'success';
         form.reset();
-        // reset() clears the hidden input but not the thumbnail's selected state.
+        // On a hidden input, .value reflects the content attribute, so assigning
+        // it also sets the attribute — which is the default reset() restores to.
+        // The style therefore survives reset() and has to be cleared by hand,
+        // along with the thumbnail's selected state.
+        frameStyleInput.value = '';
         frameThumbsEl.querySelectorAll('.frame-thumb.selected')
           .forEach((el) => el.classList.remove('selected'));
         restoreFramePreview();
+        updateFrameSummary();
+        refreshLandWarning();
         updateSourceVisibility();
         // reset() clears the values but leaves everything derived from them
         // showing the old order — the sheet-count field included.
