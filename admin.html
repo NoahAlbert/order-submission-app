@@ -190,6 +190,13 @@
   }
   button.confirm-btn:hover { border-color: var(--accent); }
   .confirmed-tag { color: var(--success); font-size: var(--text-sm); white-space: nowrap; }
+  /* Destructive, and on every row: quiet until you go for it. */
+  td.delete-cell, th.delete-cell { width: 5rem; text-align: center; }
+  button.delete-btn {
+    background: transparent; color: var(--fg-muted); border-color: var(--border);
+    padding: 0.3rem 0.7rem; font-size: var(--text-sm);
+  }
+  button.delete-btn:hover { color: var(--danger); border-color: var(--danger); }
   .empty-note { color: var(--fg-muted); font-size: 0.85rem; margin: var(--space-3) 0 0; }
 </style>
 </head>
@@ -234,7 +241,16 @@
       </div>
     </section>
 
-    <h2 style="font-size:1.05rem; margin:0 0 0.5rem">All orders</h2>
+    <h2 style="font-size:1.05rem; margin:0 0 0.35rem">All orders</h2>
+    <p class="hint">
+      Everything clients have submitted, as they submitted it.
+      <strong>Status</strong> is whether you've taken the order — confirming one
+      sets it to <em>Accepted</em> for you, so the dropdown is really there for
+      turning work down. <strong>Price Quote</strong> starts on the estimate the
+      client was shown; edit it before you confirm and that figure carries
+      through. <strong>Delete</strong> removes an order for good, along with its
+      confirmed record if it has one.
+    </p>
     <table id="orders-table">
       <thead>
         <tr>
@@ -249,6 +265,7 @@
           <th>Price Quote</th>
           <th>Paid</th>
           <th>Confirm</th>
+          <th class="delete-cell">Delete</th>
         </tr>
       </thead>
       <tbody id="orders-body"></tbody>
@@ -261,6 +278,8 @@
         tracked independently — tick them off as the job moves. An order printed
         <strong>unsleeved</strong> has no sleeving step, so its
         <strong>Cut and sleeved</strong> box is ticked and locked.
+        <strong>Delete</strong> here removes only this record: the order returns
+        to the table above, unconfirmed, and can be confirmed again.
       </p>
       <table id="confirmed-table">
         <thead>
@@ -274,6 +293,7 @@
             <th class="flag">Printed</th>
             <th class="flag">Cut and sleeved</th>
             <th class="flag">Delivered</th>
+            <th class="delete-cell">Delete</th>
           </tr>
         </thead>
         <tbody id="confirmed-body"></tbody>
@@ -325,7 +345,15 @@
     const confirmedBody = document.getElementById('confirmed-body');
     const confirmedEmpty = document.getElementById('confirmed-empty');
 
-    const STATUSES = ['new', 'wip', 'complete', 'delivered'];
+    // Whether the order has been taken, not how far along it is — the four
+    // fulfillment steps live on the confirmed row below. Confirming an order
+    // sets it to accepted, so this dropdown is really for the other two.
+    const STATUS_LABELS = {
+      new: 'New',
+      accepted: 'Accepted',
+      rejected: 'Rejected',
+    };
+    const STATUSES = Object.keys(STATUS_LABELS);
 
     // How the order form's stored sleeving value reads in a table.
     const SLEEVING_LABELS = {
@@ -395,10 +423,14 @@
         tr.dataset.id = order.id;
 
         const statusSelect = document.createElement('select');
-        for (const s of STATUSES) {
+        // A value from before the status column was narrowed would otherwise
+        // show as "New" and quietly become that on the next save, so it gets an
+        // option of its own until someone picks a real one.
+        const values = STATUSES.includes(order.status) ? STATUSES : [...STATUSES, order.status];
+        for (const s of values) {
           const opt = document.createElement('option');
           opt.value = s;
-          opt.textContent = s;
+          opt.textContent = STATUS_LABELS[s] || `${s} (old)`;
           if (s === order.status) opt.selected = true;
           statusSelect.appendChild(opt);
         }
@@ -408,6 +440,8 @@
         const priceInput = document.createElement('input');
         priceInput.type = 'number';
         priceInput.step = '0.01';
+        // Starts on the estimate the client saw when they submitted; blank only
+        // for orders taken before the form started sending it.
         priceInput.value = order.price_quote ?? '';
         priceInput.placeholder = '—';
         priceInput.addEventListener('change', () => saveField(tr, orderPath, {
@@ -431,11 +465,14 @@
           <td class="price-cell"></td>
           <td class="paid-cell"></td>
           <td class="confirm-cell"></td>
+          <td class="delete-cell"></td>
         `;
         tr.querySelector('.status-cell').appendChild(statusSelect);
         tr.querySelector('.price-cell').appendChild(priceInput);
         tr.querySelector('.paid-cell').appendChild(paidCheckbox);
         tr.querySelector('.confirm-cell').appendChild(confirmControl(order));
+        tr.querySelector('.delete-cell').appendChild(
+          deleteButton(() => deleteOrder(order)));
 
         if (order.img_source) {
           const imgCell = tr.querySelector('.img-cell');
@@ -488,6 +525,70 @@
 
     function sleevingLabel(value) {
       return SLEEVING_LABELS[value] || SLEEVING_LABELS.none;
+    }
+
+    // Deleting is the one thing on this page that cannot be undone, so every
+    // one of these asks first, in words that name what actually goes.
+    function deleteButton(run) {
+      const btn = document.createElement('button');
+      btn.className = 'delete-btn';
+      btn.textContent = 'Delete';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await run();
+        } finally {
+          // The row is usually gone by now; re-enabling matters when the caller
+          // backed out or the request failed.
+          btn.disabled = false;
+        }
+      });
+      return btn;
+    }
+
+    // Both tables reload afterwards: deleting an order removes it from the
+    // confirmed table too, and un-confirming one turns its label back into a
+    // Confirm button.
+    async function runDelete(path, question) {
+      if (!window.confirm(question)) return;
+      try {
+        await api(path, { method: 'DELETE' });
+      } catch (err) {
+        if (err.message !== 'Unauthorized') {
+          alert('Could not delete that record: ' + err.message);
+        }
+        return;
+      }
+      try {
+        await loadConfirmedOrders();
+        await loadOrders();
+      } catch (err) {
+        // Already surfaced by api() — the delete itself went through.
+      }
+    }
+
+    function deleteOrder(order) {
+      const who = order.name ? `${order.name}'s order` : 'this order';
+      return runDelete(
+        `/api/orders/${order.id}`,
+        `Delete ${who}, submitted ${fmtDate(order.created_at)}?`
+        + (confirmedIds.has(order.id)
+          ? '\n\nIt has been confirmed, so its confirmed price and fulfillment'
+            + ' checkboxes go with it.'
+          : '')
+        + '\n\nThis cannot be undone.',
+      );
+    }
+
+    function deleteConfirmed(row) {
+      const order = row.orders || {};
+      const who = order.name ? `${order.name}'s order` : 'this order';
+      return runDelete(
+        `/api/confirmed-orders/${row.order_id}`,
+        `Remove ${who} from confirmed orders?`
+        + '\n\nThe order itself stays in All orders and can be confirmed again,'
+        + ' but its confirmed price and fulfillment checkboxes are lost.',
+      );
     }
 
     // Either the button that promotes an order, or the note saying it already
@@ -570,8 +671,11 @@
           <td class="flag printed-cell"></td>
           <td class="flag sleeved-cell"></td>
           <td class="flag delivered-cell"></td>
+          <td class="delete-cell"></td>
         `;
         tr.querySelector('.price-cell').appendChild(priceInput);
+        tr.querySelector('.delete-cell').appendChild(
+          deleteButton(() => deleteConfirmed(row)));
 
         for (const [field, selector] of CONFIRMED_FLAGS) {
           const box = document.createElement('input');

@@ -24,7 +24,7 @@ export async function onRequestPost(context) {
   const {
     name, email, orderSize, imgSourceFlag, imgSourceLink,
     cardlist, customRequests, imgSourceFile,
-    frameStyle, cardImages, cardFrameStyles, sleeving,
+    frameStyle, cardImages, cardFrameStyles, sleeving, priceQuote,
   } = body;
 
   // Email is optional: the form stopped collecting it. "I'm providing my own
@@ -43,6 +43,18 @@ export async function onRequestPost(context) {
   if (!VALID_SLEEVING.includes(sleevingValue)) {
     return json({ error: 'Invalid sleeving' }, 400);
   }
+
+  // The estimate the form showed on screen, stored as submitted so the admin
+  // page opens on that number rather than an empty box. A quote the form could
+  // not work out (or a payload without one) lands as null — a blank cell, not a
+  // rejected order.
+  // Number(null) is 0, and the form sends null for an order it could not quote
+  // — so an absent quote is checked for before it is converted, or it would
+  // land as a $0.00 price rather than a blank one.
+  const quoted = priceQuote === null || priceQuote === undefined || priceQuote === ''
+    ? NaN
+    : Number(priceQuote);
+  const priceQuoteValue = Number.isFinite(quoted) && quoted >= 0 ? quoted : null;
 
   const supabase = createSupabaseClient(context.env);
   let imgSource = null;
@@ -69,6 +81,7 @@ export async function onRequestPost(context) {
       img_source_flag: imgSourceFlag,
       img_source: imgSource,
       cardlist: cardlist || '',
+      price_quote: priceQuoteValue,
       custom_requests: customRequests || null,
       // Order-level style, plus the per-line resolutions so each column stands
       // alone. Blank whenever the chosen source does not use our frames.

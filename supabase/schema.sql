@@ -5,11 +5,16 @@ create table public.orders (
   created_at timestamptz not null default now(),
   name text not null,
   email text,
-  status text not null default 'new' check (status in ('new', 'wip', 'complete', 'delivered')),
+  -- Whether the order has been taken, not how far along it is: the
+  -- fulfillment stages are the flags on confirmed_orders. Confirming an order
+  -- sets this to 'accepted'.
+  status text not null default 'new' check (status in ('new', 'accepted', 'rejected')),
   order_size integer not null,
   img_source_flag text not null check (img_source_flag in ('scryfall', 'custom-frames', 'custom-art', 'client')),
   img_source text,
   cardlist text not null,
+  -- The quote the client was shown when they submitted, then editable from the
+  -- admin page. Null only for orders taken before the form started sending it.
   price_quote numeric,
   paid boolean not null default false,
   custom_requests text,

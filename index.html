@@ -1294,27 +1294,53 @@
         + '</span><span class="quote-amount">' + escapeHtml(amount) + '</span></div>';
     }
 
-    function renderQuote() {
+    // The one place a quote is worked out. Returns either the reason there is
+    // no quote yet, or the whole breakdown — so the box on screen and the
+    // number stored with the order can never disagree.
+    function computeQuote() {
       const base = pricingFor('base');
       const extra = pricingFor(imgSourceFlagEl.value);
       const mode = orderSizeModeEl.value;
 
       if (!base || !extra || !mode) {
-        quoteBox.innerHTML = '<div class="quote-empty">'
-          + 'Choose an order size and an image source above and your estimate appears here.</div>';
-        return;
+        return { ready: false, message: 'Choose an order size and an image source above'
+          + ' and your estimate appears here.' };
       }
 
       const byDeck = mode === 'commander';
       const sheets = byDeck ? null : sheetCount();
       if (!byDeck && sheets === null) {
-        quoteBox.innerHTML = '<div class="quote-empty">'
-          + 'Enter how many sheets you need to see your estimate.</div>';
-        return;
+        return { ready: false, message: 'Enter how many sheets you need to see your estimate.' };
       }
 
       const rate = (row) => Number(byDeck ? row.per_deck : row.per_sheet) || 0;
       const amount = (row) => (byDeck ? rate(row) : rate(row) * sheets);
+
+      // Unsleeved has no pricing row, and sleeving is unpriced per sheet until
+      // someone fills those rates in — both come out as nothing extra.
+      const sleeveRow = pricingFor(SLEEVING_PRICING_IDS[sleevingEl.value]);
+      const sleeveAmount = sleeveRow ? amount(sleeveRow) : 0;
+
+      return {
+        ready: true,
+        base, extra, sleeveRow, byDeck, sheets, rate, amount, sleeveAmount,
+        baseAmount: amount(base),
+        extraAmount: amount(extra),
+        total: amount(base) + amount(extra) + sleeveAmount,
+        // A minimum is a floor, not a price: the number is still worth storing,
+        // but it is the start of the conversation rather than the end of it.
+        isMinimum: !!extra.is_minimum,
+      };
+    }
+
+    function renderQuote() {
+      const quote = computeQuote();
+      if (!quote.ready) {
+        quoteBox.innerHTML = '<div class="quote-empty">' + escapeHtml(quote.message) + '</div>';
+        return;
+      }
+
+      const { base, extra, sleeveRow, byDeck, sheets, rate, amount, sleeveAmount, total } = quote;
       const detail = (row) => (byDeck
         ? 'Full Deck (13 sheets)'
         : sheets + (sheets === 1 ? ' sheet × ' : ' sheets × ') + fmtMoney(rate(row)));
@@ -1322,15 +1348,8 @@
       // A zero-rate source is priced, just at nothing extra — saying so beats
       // a "$0.00" line that reads like a bug, and beats hiding it entirely.
       const charged = rate(extra) > 0;
-
-      // Unsleeved has no pricing row, and sleeving is unpriced per sheet until
-      // someone fills those rates in — both land on the same "Included" line.
-      const sleeveRow = pricingFor(SLEEVING_PRICING_IDS[sleevingEl.value]);
-      const sleeveAmount = sleeveRow ? amount(sleeveRow) : 0;
       const sleeveCharged = sleeveAmount > 0;
       const sleeveLabel = sleevingEl.selectedOptions[0].textContent;
-
-      const total = amount(base) + amount(extra) + sleeveAmount;
 
       quoteBox.innerHTML =
         quoteLineHtml(base.label, detail(base), fmtMoney(amount(base)))
@@ -2195,6 +2214,9 @@
       status.className = '';
 
       const usable = lookupIsUsable();
+      // The same figure the quote box is showing as they press submit, so the
+      // admin page opens on the number the client actually saw.
+      const quote = computeQuote();
       const data = {
         name: form.name.value,
         orderSize: resolvedOrderSize(),
@@ -2211,6 +2233,7 @@
           ? lookupRows.map(effectiveFrameStyle).join('\n')
           : '',
         sleeving: form.sleeving.value,
+        priceQuote: quote.ready ? quote.total : null,
         customRequests: form.custom_requests.value,
         imgSourceFile: null,
       };
