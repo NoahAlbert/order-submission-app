@@ -1,6 +1,8 @@
 import { createSupabaseClient, requireAdmin, json } from '../../_lib.js';
 
-const VALID_STATUSES = ['new', 'wip', 'complete', 'delivered'];
+// Whether the order has been taken, not how far along it is — the fulfillment
+// stages are the flags on a confirmed order.
+const VALID_STATUSES = ['new', 'accepted', 'rejected'];
 
 // PATCH /api/orders/:id — admin-only, updates status/paid/price_quote.
 export async function onRequestPatch(context) {
@@ -35,4 +37,21 @@ export async function onRequestPatch(context) {
 
   if (error) return json({ error: error.message }, 500);
   return json(data);
+}
+
+// DELETE /api/orders/:id — admin-only, removes the order outright.
+// confirmed_orders.order_id cascades, so this also drops the fulfillment
+// record if the order had been confirmed; the admin page says so before asking.
+export async function onRequestDelete(context) {
+  const authError = requireAdmin(context.request, context.env);
+  if (authError) return authError;
+
+  const supabase = createSupabaseClient(context.env);
+  const { error } = await supabase
+    .from('orders')
+    .delete()
+    .eq('id', context.params.id);
+
+  if (error) return json({ error: error.message }, 500);
+  return json({ deleted: true });
 }

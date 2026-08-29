@@ -9,19 +9,20 @@ Supabase (free Postgres + file storage).
 - `index.html` — the public order form. The image-upload section only
   appears when the client selects "I'm providing my own images."
 - `admin.html` — password-gated table of all orders. Lets you edit `status`,
-  `paid`, and `price_quote` inline; changes save immediately. Above the table,
-  a **Pricing** editor sets the numbers the form quotes from; below it, a
-  **Confirmed orders** table tracks the jobs whose price you've agreed.
+  `paid`, and `price_quote` inline, and delete a record outright; changes save
+  immediately. Above the table, a **Pricing** editor sets the numbers the form
+  quotes from; below it, a **Confirmed orders** table tracks the jobs whose
+  price you've agreed.
 - `functions/api/orders/index.js` — `GET` (list, admin-only) / `POST`
   (create, public) for `/api/orders`.
-- `functions/api/orders/[id].js` — `PATCH` (admin-only) for
+- `functions/api/orders/[id].js` — `PATCH` / `DELETE` (admin-only) for
   `/api/orders/:id`.
 - `functions/api/pricing/index.js` — `GET` (public, feeds the quote) / `PUT`
   (admin-only) for `/api/pricing`.
 - `functions/api/confirmed-orders/index.js` — `GET` (list) / `POST` (promote an
   order) for `/api/confirmed-orders`, both admin-only.
-- `functions/api/confirmed-orders/[id].js` — `PATCH` (admin-only) for
-  `/api/confirmed-orders/:orderId`, keyed by the **order's** id.
+- `functions/api/confirmed-orders/[id].js` — `PATCH` / `DELETE` (admin-only)
+  for `/api/confirmed-orders/:orderId`, keyed by the **order's** id.
 - `functions/_lib.js` — shared Supabase client + admin-password check.
 - `supabase/schema.sql` — the `orders`, `pricing` and `confirmed_orders` tables
   + `order-uploads` storage bucket definition (already applied to the live
@@ -37,7 +38,9 @@ only what happens afterwards, so the original submission is never edited.
 A confirmed order starts with its `confirmed_price` copied from the quote
 (edit it inline from there) and four independent checkboxes: **Paid**,
 **Printed**, **Cut and sleeved**, **Delivered**. The order stays visible in the
-table above, with its Confirm button replaced by a "Confirmed" label.
+table above, with its Confirm button replaced by a "Confirmed" label and its
+status set to `accepted` — confirming an order *is* accepting it, so you never
+set both by hand.
 
 An order submitted **unsleeved** has no sleeving step, so its *Cut and sleeved*
 box is ticked when the order is confirmed and shown greyed out. The API enforces
@@ -51,18 +54,21 @@ the same rule: `PATCH` refuses to unset that flag on an unsleeved order.
 | created_at | app | timestamptz | auto |
 | name | client | text | |
 | email | client | text | |
-| status | **you** | enum | `new` / `wip` / `complete` / `delivered`; starts at `new`, edited in the admin page |
+| status | **you** | enum | `new` / `accepted` / `rejected`; starts at `new`, set to `accepted` when you confirm the order, otherwise edited in the admin page |
 | order_size | client | int | number of card slots — sheets x 8, or 104 for a full deck |
 | img_source_flag | client | enum | `scryfall` / `custom-frames` / `custom-art` / `client` |
 | img_source | app/client | text, nullable | Supabase Storage public URL if a file was uploaded, or the link the client pasted |
 | cardlist | client | text | one line per physical card, line-aligned with `card_images` and `card_frame_styles` |
 | sleeving | client | enum | `none` / `penny` / `colored`; defaults to `none`, priced into the quote |
-| price_quote | **you** | numeric, nullable | starts blank, edited in the admin page |
+| price_quote | client/**you** | numeric, nullable | the estimate the form showed at submission, then editable in the admin page |
 | paid | **you** | bool | starts `false`, edited in the admin page |
 | custom_requests | client | text, nullable | free-form notes |
 
-`status`, `price_quote`, and `paid` are intentionally not on the public form
-— a client shouldn't be able to set their own price or mark an order paid.
+`status` and `paid` are intentionally not on the public form — a client
+shouldn't be able to accept their own order or mark it paid. `price_quote` is
+sent by the form, but only as the estimate it just displayed from your own
+pricing rows; it is a starting point in the admin table, not an agreed price.
+The number that counts is `confirmed_orders.confirmed_price`.
 
 `confirmed_orders` holds one row per confirmed order, keyed by the order's id:
 
@@ -127,8 +133,10 @@ seeded values, used only as a fallback when `/api/pricing` can't be reached, so
 the quote degrades to a sensible number instead of an empty box. Update it if
 you change the seeds and want the offline fallback to stay honest.
 
-The quote is an estimate shown to the client; it is **not** written to the
-order. `price_quote` stays yours to fill in from the admin table.
+The quote is an estimate. It is stored on the order as `price_quote` so the
+admin table opens on the number the client actually saw, and stays editable
+there — confirming an order copies whatever it says at that moment into
+`confirmed_price`.
 
 ## Local development
 
@@ -166,11 +174,14 @@ use the `wrangler pages deploy` command above after pushing.
 
 ## Supabase setup
 
-**Run `supabase/migrations/0003_sleeving_and_confirmed_orders.sql` in the live
-project's SQL Editor once.** It adds the `sleeving` column to `orders`, the two
-sleeving rows to `pricing`, and the `confirmed_orders` table. Until you do,
-submitting an order fails (the form now sends `sleeving`), and the admin page's
-Confirmed orders table won't load.
+**Run `supabase/migrations/0003_sleeving_and_confirmed_orders.sql` and then
+`0004_order_status_and_price_quote.sql` in the live project's SQL Editor
+once.** 0003 adds the `sleeving` column to `orders`, the two sleeving rows to
+`pricing`, and the `confirmed_orders` table; until you run it, submitting an
+order fails (the form now sends `sleeving`) and the Confirmed orders table
+won't load. 0004 narrows `status` to `new` / `accepted` / `rejected`, folding
+any existing `wip` / `complete` / `delivered` rows into `accepted`; until you
+run it, saving a status from the admin page fails the check constraint.
 
 Migrations are cumulative and each is safe to re-run; if a project is further
 behind, apply the earlier files in `supabase/migrations/` in order first.
@@ -198,6 +209,12 @@ npx wrangler pages secret put ADMIN_PASSWORD --project-name order-submission-app
   enabled on the `orders` table with no policies — only server-side code
   using the `service_role` key (the Cloudflare Functions) can read/write it;
   the `anon` key has no access.
+- **Delete** on an All-orders row removes the order for good, and its
+  confirmed record with it (`confirmed_orders.order_id` cascades). **Delete**
+  on a Confirmed-orders row removes only the fulfillment record — the order
+  goes back to being unconfirmed and can be confirmed again, and its status is
+  left where it is. Both ask first; neither can be undone, and neither touches
+  files already in the storage bucket.
 - Admin auth is a single shared password (no per-user accounts), checked
   server-side and sent as `Authorization: Bearer <password>`. Kept in
   `sessionStorage` client-side, so it clears when the admin tab closes.
