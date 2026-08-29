@@ -58,5 +58,11 @@ export async function onRequestPost(context) {
     return json({ error: 'That order is already confirmed' }, 409);
   }
   if (error) return json({ error: error.message }, 500);
+
+  // Confirming an order is accepting it, so the admin page never has to set
+  // both. Done after the insert, and not fatal on its own: the confirmation is
+  // the record that matters, and the status stays editable by hand.
+  await supabase.from('orders').update({ status: 'accepted' }).eq('id', order.id);
+
   return json(data, 201);
 }

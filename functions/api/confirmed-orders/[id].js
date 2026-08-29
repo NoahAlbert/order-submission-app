@@ -51,3 +51,21 @@ export async function onRequestPatch(context) {
   if (error) return json({ error: error.message }, 500);
   return json(data);
 }
+
+// DELETE /api/confirmed-orders/:orderId — admin-only, drops the fulfillment
+// record. The order itself stays in All orders, unconfirmed and free to be
+// confirmed again; its status is left alone, since un-confirming is not the
+// same decision as un-accepting.
+export async function onRequestDelete(context) {
+  const authError = requireAdmin(context.request, context.env);
+  if (authError) return authError;
+
+  const supabase = createSupabaseClient(context.env);
+  const { error } = await supabase
+    .from('confirmed_orders')
+    .delete()
+    .eq('order_id', context.params.id);
+
+  if (error) return json({ error: error.message }, 500);
+  return json({ deleted: true });
+}
